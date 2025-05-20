@@ -9,7 +9,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 // @WebServlet annotation automatically maps the servlet to the /hello URL
-@WebServlet("/hello")
+//@WebServlet("/hello")
 public class HelloWorldServlet extends HttpServlet {
 
     // This method handles HTTP GET requests
