@@ -43,6 +43,7 @@ pipeline {
   steps {
     echo '🚀 Deploying WAR file to Tomcat server...'
     sshagent(['tomcat-ec2-key']) { // Use your actual Jenkins credential ID
+        sh 'ssh-keyscan -H 13.233.139.135 >> ~/.ssh/known_hosts'
       sh 'scp hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/'
     }
   }
