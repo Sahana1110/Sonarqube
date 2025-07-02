@@ -1,27 +1,49 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'Maven 3' // Match with Jenkins Maven installation name
+    }
+
+    environment {
+        SONARQUBE = 'SonarQube' // Match Jenkins SonarQube configuration name
+    }
+
     stages {
         stage('Build') {
             steps {
-                echo "Building Maven project..."
+                echo "🔨 Building Maven project..."
                 dir('Maven/hello-world-maven/hello-world') {
                     sh 'mvn clean package'
                 }
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                echo "🔎 Running SonarQube analysis..."
+                dir('Maven/hello-world-maven/hello-world') {
+                    withSonarQubeEnv("${SONARQUBE}") {
+                        sh 'mvn sonar:sonar -Dsonar.projectKey=hello-world'
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                echo "🧪 Checking SonarQube quality gate..."
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
         stage('Deploy') {
             steps {
-                echo "Deploying WAR file to Tomcat server..."
-
-                // SCP command with full path in Jenkins workspace
+                echo "🚀 Deploying WAR file to Tomcat server..."
                 sh '''
                     scp Maven/hello-world-maven/hello-world/target/hello-world.war ec2-user@65.2.3.46:/opt/tomcat/webapps/
-                '''
-
-                // SSH command to restart Tomcat on remote server
-                sh '''
                     ssh ec2-user@65.2.3.46 'sudo systemctl restart tomcat'
                 '''
             }
@@ -29,15 +51,9 @@ pipeline {
 
         stage('Test') {
             steps {
-                echo "Testing deployed application..."
-
-                // Wait for Tomcat to load WAR
+                echo "🌐 Testing deployed application..."
                 sh 'sleep 15'
-
-                // Curl test URL to confirm deployment success
-                sh '''
-                    curl --fail http://65.2.3.46:8080/hello-world/index.jsp
-                '''
+                sh 'curl --fail http://65.2.3.46:8080/hello-world/index.jsp'
             }
         }
     }
@@ -45,7 +61,7 @@ pipeline {
     post {
         success {
             mail to: 'sahanams031@gmail.com',
-                 subject: 'SUCCESS: hello-world deployed',
+                 subject: '✅ SUCCESS: hello-world deployed',
                  body: '''\
 Hello,
 
@@ -53,14 +69,14 @@ Your 'hello-world' app has been successfully deployed on Tomcat (172.31.10.50).
 
 Access it here: http://65.2.3.46:8080/hello-world/index.jsp
 
-Regards,
+Regards,  
 Jenkins
 '''
         }
 
         failure {
-            mail to: 'your-email@example.com',
-                 subject: 'FAILURE: hello-world deployment',
+            mail to: 'sahanams031@gmail.com',
+                 subject: '❌ FAILURE: hello-world deployment',
                  body: '''\
 Hello,
 
@@ -68,7 +84,7 @@ Deployment or test failed for 'hello-world' on Tomcat (172.31.10.50).
 
 Please check Jenkins logs.
 
-Regards,
+Regards,  
 Jenkins
 '''
         }

@@ -5,7 +5,6 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- Group and Artifact Information -->
     <groupId>com.example</groupId>
     <artifactId>hello-world</artifactId>
     <version>1.0-SNAPSHOT</version>
@@ -14,9 +13,8 @@
     <name>hello-world Maven Webapp</name>
     <url>http://maven.apache.org</url>
 
-    <!-- Dependencies -->
     <dependencies>
-        <!-- Servlet API Dependency (provided by Tomcat) -->
+        <!-- Servlet API Dependency -->
         <dependency>
             <groupId>javax.servlet</groupId>
             <artifactId>javax.servlet-api</artifactId>
@@ -24,7 +22,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- JUnit Dependency (optional for unit testing, included by default in your original) -->
+        <!-- JUnit Dependency -->
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -33,13 +31,11 @@
         </dependency>
     </dependencies>
 
-    <!-- Build Settings -->
     <build>
-        <!-- Name of the final WAR file -->
         <finalName>hello-world</finalName>
 
-        <!-- Maven Compiler Plugin to compile with Java 17 -->
         <plugins>
+            <!-- Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -50,7 +46,7 @@
                 </configuration>
             </plugin>
 
-            <!-- Maven WAR Plugin -->
+            <!-- WAR Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-war-plugin</artifactId>
@@ -59,7 +55,13 @@
                     <warSourceDirectory>src/main/webapp</warSourceDirectory>
                 </configuration>
             </plugin>
+
+            <!-- ✅ SonarQube Plugin -->
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>3.9.1.2184</version>
+            </plugin>
         </plugins>
     </build>
-
 </project>
