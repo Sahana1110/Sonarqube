@@ -40,13 +40,14 @@ pipeline {
         }
 
         stage('Deploy') {
-            steps {
-                echo "🚀 Deploying WAR file to Tomcat server..."
-                sh '''
-                    scp Sonarqube/hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/
-                '''
-            }
-        }
+  steps {
+    echo '🚀 Deploying WAR file to Tomcat server...'
+    sshagent(['tomcat-ec2-key']) { // Use your actual Jenkins credential ID
+      sh 'scp hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/'
+    }
+  }
+}
+
 
         stage('Test') {
             steps {
