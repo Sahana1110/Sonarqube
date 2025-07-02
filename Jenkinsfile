@@ -43,8 +43,7 @@ pipeline {
             steps {
                 echo "🚀 Deploying WAR file to Tomcat server..."
                 sh '''
-                    scp hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/
-                    ssh ec2-user@13.233.139.135 'sudo systemctl restart tomcat'
+                    scp Sonarqube/hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/
                 '''
             }
         }
