@@ -13,7 +13,7 @@ pipeline {
         stage('Build') {
             steps {
                 echo "🔨 Building Maven project..."
-                dir('Sonarqube/hello-world-maven/hello-world') {
+                dir('hello-world-maven/hello-world') {
                     sh 'mvn clean package'
                 }
             }
@@ -22,7 +22,7 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 echo "🔎 Running SonarQube analysis..."
-                dir('Sonarqube/hello-world-maven/hello-world') {
+                dir('hello-world-maven/hello-world') {
                     withSonarQubeEnv("${SONARQUBE}") {
                         sh 'mvn sonar:sonar -Dsonar.projectKey=hello-world'
                     }
@@ -43,7 +43,7 @@ pipeline {
             steps {
                 echo "🚀 Deploying WAR file to Tomcat server..."
                 sh '''
-                    scp Sonarqube/hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/
+                    scp hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/
                     ssh ec2-user@13.233.139.135 'sudo systemctl restart tomcat'
                 '''
             }
