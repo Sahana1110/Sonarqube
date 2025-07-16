@@ -14,9 +14,9 @@ pipeline {
     }
 
     stages {
-        stage('Environment Info') {
+        stage('Info') {
             steps {
-                echo " Running in environment: ${params.ENV}"
+                echo " Running in environment: ${params.BRANCH_NAME}"
             }
         }
 
