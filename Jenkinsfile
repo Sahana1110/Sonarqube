@@ -1,15 +1,25 @@
 pipeline {
     agent any
 
+    parameters {
+        string(name: 'ENV', defaultValue: 'dev', description: 'Target environment')
+    }
+
     tools {
-        maven 'Maven 3' // Match with Jenkins Maven installation name
+        maven 'Maven 3'
     }
 
     environment {
-        SONARQUBE = 'SonarQube' // Match Jenkins SonarQube configuration name
+        SONARQUBE = 'SonarQube'
     }
 
     stages {
+        stage('Environment Info') {
+            steps {
+                echo "🌍 Running in environment: ${params.ENV}"
+            }
+        }
+
         stage('Build') {
             steps {
                 echo "🔨 Building Maven project..."
@@ -40,15 +50,14 @@ pipeline {
         }
 
         stage('Deploy') {
-  steps {
-    echo '🚀 Deploying WAR file to Tomcat server...'
-    sshagent(['tomcat-ec2-key']) { // Use your actual Jenkins credential ID
-        sh 'ssh-keyscan -H 13.233.139.135 >> ~/.ssh/known_hosts'
-      sh 'scp hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/'
-    }
-  }
-}
-
+            steps {
+                echo '🚀 Deploying WAR file to Tomcat server...'
+                sshagent(['tomcat-ec2-key']) {
+                    sh 'ssh-keyscan -H 13.233.139.135 >> ~/.ssh/known_hosts'
+                    sh 'scp hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/'
+                }
+            }
+        }
 
         stage('Test') {
             steps {
@@ -63,7 +72,7 @@ pipeline {
         success {
             mail to: 'sahanams031@gmail.com',
                  subject: '✅ SUCCESS: hello-world deployed',
-                 body: '''\
+                 body: """\
 Hello,
 
 Your 'hello-world' app has been successfully deployed on Tomcat (172.31.10.50).
@@ -72,13 +81,13 @@ Access it here: http://13.233.139.135:8080/hello-world/index.jsp
 
 Regards,  
 Jenkins
-'''
+"""
         }
 
         failure {
             mail to: 'sahanams031@gmail.com',
                  subject: '❌ FAILURE: hello-world deployment',
-                 body: '''\
+                 body: """\
 Hello,
 
 Deployment or test failed for 'hello-world' on Tomcat (172.31.10.50).
@@ -87,7 +96,7 @@ Please check Jenkins logs.
 
 Regards,  
 Jenkins
-'''
+"""
         }
     }
 }
