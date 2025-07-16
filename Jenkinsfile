@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'ENV', defaultValue: 'dev', description: 'Target environment')
+        string(name: 'ENV', defaultValue: 'main', description: 'Target environment')
     }
 
     tools {
