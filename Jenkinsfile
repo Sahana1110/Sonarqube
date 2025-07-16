@@ -53,8 +53,8 @@ pipeline {
             steps {
                 echo '🚀 Deploying WAR file to Tomcat server...'
                 sshagent(['tomcat-ec2-key']) {
-                    sh 'ssh-keyscan -H 13.233.139.135 >> ~/.ssh/known_hosts'
-                    sh 'scp hello-world-maven/hello-world/target/hello-world.war ec2-user@13.233.139.135:/opt/tomcat/webapps/'
+                    sh 'ssh-keyscan -H 3.111.35.241 >> ~/.ssh/known_hosts'
+                    sh 'scp hello-world-maven/hello-world/target/hello-world.war ec2-user@3.111.35.241:/opt/tomcat/webapps/'
                 }
             }
         }
@@ -63,7 +63,7 @@ pipeline {
             steps {
                 echo "🌐 Testing deployed application..."
                 sh 'sleep 15'
-                sh 'curl --fail http://13.233.139.135:8080/hello-world/index.jsp'
+                sh 'curl --fail http://3.111.35.241:8080/hello-world/index.jsp'
             }
         }
     }
