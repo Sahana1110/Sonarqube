@@ -16,13 +16,13 @@ pipeline {
     stages {
         stage('Environment Info') {
             steps {
-                echo "🌍 Running in environment: ${params.ENV}"
+                echo " Running in environment: ${params.ENV}"
             }
         }
 
         stage('Build') {
             steps {
-                echo "🔨 Building Maven project..."
+                echo " Building Maven project..."
                 dir('hello-world-maven/hello-world') {
                     sh 'mvn clean package'
                 }
@@ -42,7 +42,7 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                echo "🧪 Checking SonarQube quality gate..."
+                echo "Checking SonarQube quality gate..."
                 timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
