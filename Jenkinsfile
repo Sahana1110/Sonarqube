@@ -10,21 +10,21 @@ pipeline {
     }
 
     environment {
-        SONARQUBE = 'SonarQube'
-        SONAR_TOKEN = credentials('sonar-token') // Jenkins credential ID
+        SONARQUBE = 'SonarQube'                     // Name from Jenkins Sonar config
+        SONAR_TOKEN = credentials('sonar-token')    // Secret text credential ID
     }
 
     stages {
         stage('Checkout') {
             steps {
                 echo "📦 Checking out branch: ${params.BRANCH_NAME}"
-                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/mywebapp.git'
+                git url: 'https://github.com/Sahana1110/mywebapp.git', branch: "${params.BRANCH_NAME}"
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                echo "🔎 Running SonarQube scan..."
+                echo "🔎 Running SonarQube Scan"
                 withSonarQubeEnv("${SONARQUBE}") {
                     sh """
                         mvn clean verify sonar:sonar \
@@ -37,29 +37,34 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                echo "🛡️ Waiting for Quality Gate..."
+                echo "⏳ Waiting for Quality Gate result"
                 timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage('Build') {
+        stage('Build & Package') {
             steps {
-                echo "🔨 Building the Maven project..."
+                echo "🔨 Building project"
                 sh 'mvn package'
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                echo "📁 Archiving build output"
+                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
             }
         }
     }
 
     post {
         success {
-            echo "✅ SUCCESS: Code scanned and built on branch ${params.BRANCH_NAME}"
+            echo "✅ SUCCESS: Build and scan completed for ${params.BRANCH_NAME}"
         }
         failure {
-            echo "❌ FAILURE: Issue in scan or build"
+            echo "❌ FAILED: Something went wrong in pipeline"
         }
     }
 }
-
