@@ -1,11 +1,6 @@
 pipeline {
     agent any
-
-    tools {
-        maven 'Maven'        // Replace with your configured Maven name in Jenkins
-        jdk 'JDK'            // Replace with your configured JDK name in Jenkins
-    }
-
+    
     parameters {
         string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
     }
