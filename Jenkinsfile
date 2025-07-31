@@ -1,70 +1,78 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'Maven'        // Replace with your configured Maven name in Jenkins
+        jdk 'JDK'            // Replace with your configured JDK name in Jenkins
+    }
+
     parameters {
         string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
     }
 
-    tools {
-        maven 'Maven 3'
-    }
-
     environment {
-        SONARQUBE = 'SonarQube'                     // Name from Jenkins Sonar config
-        SONAR_TOKEN = credentials('sonar-token')    // Secret text credential ID
+        SONARQUBE = 'SonarQube'                     // Jenkins SonarQube server name
+        SONAR_TOKEN = credentials('sonar-token')    // Jenkins Credentials ID
+        PROJECT_DIR = 'hello-world-maven/hello-world'
     }
 
     stages {
         stage('Checkout') {
             steps {
                 echo "📦 Checking out branch: ${params.BRANCH_NAME}"
-                git url: 'https://github.com/Sahana1110/mywebapp.git', branch: "${params.BRANCH_NAME}"
+                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                echo "🔎 Running SonarQube Scan"
-                withSonarQubeEnv("${SONARQUBE}") {
-                    sh """
-                        mvn clean verify sonar:sonar \
-                        -Dsonar.projectKey=mywebapp \
-                        -Dsonar.token=${SONAR_TOKEN}
-                    """
+                echo "🔎 Running SonarQube scan..."
+                dir("${PROJECT_DIR}") {
+                    withSonarQubeEnv("${SONARQUBE}") {
+                        sh """
+                            mvn clean verify sonar:sonar \\
+                            -Dsonar.projectKey=mywebapp \\
+                            -Dsonar.token=${SONAR_TOKEN}
+                        """
+                    }
                 }
             }
         }
 
         stage('Quality Gate') {
             steps {
-                echo "⏳ Waiting for Quality Gate result"
+                echo "⏳ Waiting for Quality Gate result..."
                 timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage('Build & Package') {
+        stage('Build') {
             steps {
-                echo "🔨 Building project"
-                sh 'mvn package'
+                echo "🔨 Building the Maven project..."
+                dir("${PROJECT_DIR}") {
+                    sh 'mvn package'
+                }
             }
         }
 
-        stage('Archive Artifacts') {
+        stage('Archive Artifact') {
             steps {
-                echo "📁 Archiving build output"
-                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+                echo "📦 Archiving WAR file..."
+                dir("${PROJECT_DIR}") {
+                    archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+                }
             }
         }
     }
 
     post {
         success {
-            echo "✅ SUCCESS: Build and scan completed for ${params.BRANCH_NAME}"
+            echo "✅ Pipeline completed successfully on branch ${params.BRANCH_NAME}"
         }
         failure {
-            echo "❌ FAILED: Something went wrong in pipeline"
+            echo "❌ Pipeline failed during one of the stages"
         }
     }
 }
