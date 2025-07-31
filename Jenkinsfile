@@ -10,14 +10,14 @@ pipeline {
     }
 
     environment {
-        SONARQUBE = 'SonarQube'
+        SONARQUBE = 'SonarQube'  // Name you configured in Jenkins global config
     }
 
     stages {
         stage('Checkout') {
             steps {
                 echo "📦 Checking out branch: ${params.BRANCH_NAME}"
-                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
+                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/mywebapp.git'  // Update this
             }
         }
 
@@ -25,7 +25,7 @@ pipeline {
             steps {
                 echo "🔎 Running SonarQube scan..."
                 withSonarQubeEnv("${SONARQUBE}") {
-                    sh 'mvn clean verify sonar:sonar -Dsonar.projectKey=hello-world'
+                    sh 'mvn clean verify sonar:sonar -Dsonar.projectKey=mywebapp'
                 }
             }
         }
@@ -43,6 +43,7 @@ pipeline {
             steps {
                 echo "🔨 Building the Maven project..."
                 sh 'mvn package'
+                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true  // Optional
             }
         }
     }
