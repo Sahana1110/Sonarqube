@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'main', description: 'Target environment')
+        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
     }
 
     tools {
@@ -14,89 +14,45 @@ pipeline {
     }
 
     stages {
-        stage('Info') {
+        stage('Checkout') {
             steps {
-                echo " Running in environment: ${params.BRANCH_NAME}"
-            }
-        }
-
-        stage('Build') {
-            steps {
-                echo " Building Maven project..."
-                dir('hello-world-maven/hello-world') {
-                    sh 'mvn clean package'
-                }
+                echo "📦 Checking out branch: ${params.BRANCH_NAME}"
+                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                echo "🔎 Running SonarQube analysis..."
-                dir('hello-world-maven/hello-world') {
-                    withSonarQubeEnv("${SONARQUBE}") {
-                        sh 'mvn sonar:sonar -Dsonar.projectKey=hello-world'
-                    }
+                echo "🔎 Running SonarQube scan..."
+                withSonarQubeEnv("${SONARQUBE}") {
+                    sh 'mvn clean verify sonar:sonar -Dsonar.projectKey=hello-world'
                 }
             }
         }
 
         stage('Quality Gate') {
             steps {
-                echo "Checking SonarQube quality gate..."
+                echo "🛡️ Waiting for Quality Gate..."
                 timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage('Deploy') {
+        stage('Build') {
             steps {
-                echo '🚀 Deploying WAR file to Tomcat server...'
-                sshagent(['tomcat-ec2-key']) {
-                    sh 'ssh-keyscan -H 35.154.219.130 >> ~/.ssh/known_hosts'
-                    sh 'scp hello-world-maven/hello-world/target/hello-world.war ec2-user@35.154.219.130:/opt/tomcat/webapps/'
-                }
-            }
-        }
-
-        stage('Test') {
-            steps {
-                echo "🌐 Testing deployed application..."
-                sh 'sleep 15'
-                sh 'curl --fail http://35.154.219.130:8080/hello-world/index.jsp'
+                echo "🔨 Building the Maven project..."
+                sh 'mvn package'
             }
         }
     }
 
     post {
         success {
-            mail to: 'sahanams031@gmail.com',
-                 subject: '✅ SUCCESS: hello-world deployed',
-                 body: """\
-Hello,
-
-Your 'hello-world' app has been successfully deployed on Tomcat (172.31.10.50).
-
-Access it here: http://35.154.219.130:8080/hello-world/index.jsp
-
-Regards,  
-Jenkins
-"""
+            echo "✅ SUCCESS: Code scanned and built on branch ${params.BRANCH_NAME}"
         }
-
         failure {
-            mail to: 'sahanams031@gmail.com',
-                 subject: '❌ FAILURE: hello-world deployment',
-                 body: """\
-Hello,
-
-Deployment or test failed for 'hello-world' on Tomcat (172.31.10.50).
-
-Please check Jenkins logs.
-
-Regards,  
-Jenkins
-"""
+            echo "❌ FAILURE: Issue in scan or build"
         }
     }
 }
