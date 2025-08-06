@@ -31,7 +31,7 @@ pipeline {
         stage('SonarQube Code Analysis') {
             steps {
                 dir('Sonarqube/hello-world-maven/hello-world') {
-                    withSonarQubeEnv('MySonar') {
+                    withSonarQubeEnv('SonarQube') {
                         sh """
                             mvn clean verify sonar:sonar \
                             -Dsonar.projectKey=hello-world \
