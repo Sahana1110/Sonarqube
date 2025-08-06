@@ -104,4 +104,5 @@ post {
     always {
         cleanWs()
     }
+  }
 }
