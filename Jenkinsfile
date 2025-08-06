@@ -35,7 +35,7 @@ pipeline {
             steps {
                 dir('hello-world-maven/hello-world') {
                     sh """
-                        ${MAVEN_HOME}/bin/mvn deploy -DskipTests -DuniqueVersion=false
+                        ${MAVEN_HOME}/bin/mvn deploy -DskipTests -DuniqueVersion=true
                     """
                 }
             }
@@ -46,12 +46,14 @@ pipeline {
                 script {
                     def metadataUrl = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
                     def metadata = sh(script: "curl -s ${metadataUrl}", returnStdout: true).trim()
-                    def warName = (metadata =~ /<value>(.*?\.war)<\/value>/)[0][1]
 
-                    if (!warName) {
+                    // Extract the WAR filename from the <value> tag with .war extension
+                    def warMatch = metadata =~ /<extension>war<\/extension>\s*<value>(.*?)<\/value>/
+                    if (!warMatch) {
                         error "WAR file not found in Nexus metadata!"
                     }
 
+                    def warName = "${ARTIFACT_ID}-${warMatch[0][1]}.war"
                     env.WAR_NAME = warName
                     echo "Latest WAR from Nexus: ${env.WAR_NAME}"
                 }
