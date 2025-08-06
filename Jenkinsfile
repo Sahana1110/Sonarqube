@@ -2,20 +2,19 @@ pipeline {
     agent any
 
     environment {
-        SONARQUBE_SERVER = 'SonarQube'                          // Jenkins -> Configure System -> SonarQube server name
-        SONARQUBE_TOKEN = credentials('sonar-token')            // Jenkins credential for Sonar token
-        TOMCAT_KEY = credentials('tomcat-ec2-key')              // SSH private key for Tomcat EC2
-        MAVEN_HOME = tool 'Maven 3'                             // Maven tool name in Jenkins
+        SONARQUBE_SERVER = 'SonarQube'
+        SONARQUBE_TOKEN = credentials('sonar-token')
+        TOMCAT_KEY = credentials('tomcat-ec2-key')
+        MAVEN_HOME = tool 'Maven 3'
         NEXUS_URL = 'http://65.2.127.21:32247'
         NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots/"
         GROUP_ID = 'com.example'
         ARTIFACT_ID = 'hello-world'
         VERSION = '1.0-SNAPSHOT'
-        WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
+        WAR_NAME = 'hello-world-1.0-20250806.145804-1.war'   // 🔥 Actual filename from Nexus
     }
 
     stages {
-
         stage('Checkout SCM') {
             steps {
                 git branch: 'dev', url: 'https://github.com/Sahana1110/Sonarqube.git'
