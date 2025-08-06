@@ -31,28 +31,29 @@ pipeline {
             }
         }
 
-        stage('Build & Deploy Artifact to Nexus') {
+        stage('Build & Upload to Nexus') {
             steps {
                 dir('hello-world-maven/hello-world') {
                     sh """
-                        ${MAVEN_HOME}/bin/mvn deploy -DskipTests
+                        ${MAVEN_HOME}/bin/mvn deploy -DskipTests -DuniqueVersion=false
                     """
                 }
             }
         }
 
-        stage('Fetch Latest WAR Name') {
+        stage('Extract WAR from Nexus') {
             steps {
                 script {
                     def metadataUrl = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
-                    echo "Fetching metadata from: ${metadataUrl}"
                     def metadata = sh(script: "curl -s ${metadataUrl}", returnStdout: true).trim()
-                    def snapshotVersion = metadata.find(/<value>(.*\.war)<\/value>/) { full, name -> name }
-                    if (!snapshotVersion) {
+                    def warName = metadata.find(/<value>(.*\.war)<\/value>/) { full, name -> name }
+
+                    if (!warName) {
                         error "WAR file not found in Nexus metadata!"
                     }
-                    env.WAR_NAME = snapshotVersion
-                    echo "Latest WAR name: ${env.WAR_NAME}"
+
+                    env.WAR_NAME = warName
+                    echo "Latest WAR from Nexus: ${env.WAR_NAME}"
                 }
             }
         }
@@ -61,12 +62,12 @@ pipeline {
             steps {
                 dir('hello-world-maven/hello-world') {
                     script {
-                        def warPath = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${env.WAR_NAME}"
+                        def warUrl = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${env.WAR_NAME}"
                         def imageTag = "${ARTIFACT_ID}:latest"
 
                         writeFile file: 'Dockerfile', text: """
                         FROM tomcat:9.0
-                        ADD ${warPath} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+                        ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
                         EXPOSE 8080
                         CMD ["catalina.sh", "run"]
                         """
@@ -97,12 +98,12 @@ pipeline {
         stage('Deploy to Tomcat EC2') {
             steps {
                 script {
-                    def warPath = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${env.WAR_NAME}"
+                    def warUrl = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${env.WAR_NAME}"
                     def serverIP = '65.0.176.83'
 
                     sh """
                     ssh -o StrictHostKeyChecking=no -i ${TOMCAT_KEY} ec2-user@${serverIP} << EOF
-                        wget -O /tmp/${env.WAR_NAME} ${warPath}
+                        wget -O /tmp/${env.WAR_NAME} ${warUrl}
                         sudo mv /tmp/${env.WAR_NAME} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
                         sudo systemctl restart tomcat
                     EOF
