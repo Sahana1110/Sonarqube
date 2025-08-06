@@ -2,31 +2,32 @@ pipeline {
     agent any
 
     environment {
-        SONARQUBE_SERVER = 'SonarQube' // Name configured in Jenkins > Manage Jenkins > Configure System
-        SONARQUBE_TOKEN = credentials('sonar-token') // Jenkins credential for SonarQube token
-        TOMCAT_KEY = credentials('tomcat-ec2-key') // SSH key to Tomcat EC2
+        SONARQUBE_SERVER = 'SonarQube'                  // Jenkins > Manage Jenkins > SonarQube server name
+        SONARQUBE_TOKEN = credentials('sonar-token')    // Jenkins credentials: Secret Text
+        NEXUS_CREDS = credentials('nexus-creds')        // Jenkins credentials: Nexus username & password
+        TOMCAT_KEY = credentials('tomcat-ec2-key')      // Jenkins SSH Key for Tomcat server
         NEXUS_URL = 'http://65.2.127.21:32247'
         NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots/"
         GROUP_ID = 'com.example'
         ARTIFACT_ID = 'hello-world'
         VERSION = '1.0-SNAPSHOT'
         WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
-        MAVEN_HOME = tool 'Maven 3' // Defined in Jenkins global tool config
+        MAVEN_HOME = tool 'Maven 3'
     }
 
     parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
+        string(name: 'BRANCH_NAME', defaultValue: 'name.developer', description: 'Branch to build')
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
                 git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
             }
         }
 
-        stage('SonarQube Scan') {
+        stage('SonarQube Analysis') {
             steps {
                 dir('hello-world-maven/hello-world') {
                     withSonarQubeEnv("${SONARQUBE_SERVER}") {
@@ -36,14 +37,13 @@ pipeline {
             }
         }
 
-        stage('Build & Upload Artifact to Nexus') {
+        stage('Build & Upload to Nexus') {
             steps {
                 dir('hello-world-maven/hello-world') {
                     withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                         sh """
                             ${MAVEN_HOME}/bin/mvn deploy \
                             -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_SNAPSHOT_REPO} \
-                            -DskipTests \
                             -Dmaven.deploy.username=${NEXUS_USER} \
                             -Dmaven.deploy.password=${NEXUS_PASS}
                         """
@@ -56,17 +56,13 @@ pipeline {
             steps {
                 dir('hello-world-maven/hello-world') {
                     script {
-                        def imageTag = "${ARTIFACT_ID}:latest"
                         def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
-
                         writeFile file: 'Dockerfile', text: """
                         FROM tomcat:9.0
+                        RUN rm -rf /usr/local/tomcat/webapps/*
                         ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
-                        EXPOSE 8080
-                        CMD ["catalina.sh", "run"]
                         """
-
-                        sh "docker build -t ${imageTag} ."
+                        sh "docker build -t ${ARTIFACT_ID}:latest ."
                     }
                 }
             }
@@ -92,8 +88,8 @@ pipeline {
         stage('Deploy WAR to Tomcat EC2') {
             steps {
                 script {
-                    def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
                     def serverIP = '65.0.176.83'
+                    def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
 
                     sh """
                     ssh -o StrictHostKeyChecking=no -i ${TOMCAT_KEY} ec2-user@${serverIP} << EOF
@@ -113,3 +109,4 @@ pipeline {
         }
     }
 }
+
