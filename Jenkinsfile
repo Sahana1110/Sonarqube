@@ -14,14 +14,10 @@ pipeline {
         WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
     }
 
-    parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
-    }
-
     stages {
         stage('Checkout SCM') {
             steps {
-                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
+                git branch: 'dev', url: 'https://github.com/Sahana1110/Sonarqube.git'
             }
         }
 
@@ -40,7 +36,7 @@ pipeline {
                 dir('hello-world-maven/hello-world') {
                     withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                         sh """
-                            ${MAVEN_HOME}/bin/mvn clean deploy \
+                            ${MAVEN_HOME}/bin/mvn deploy \
                             -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_SNAPSHOT_REPO} \
                             -DskipTests \
                             -Dmaven.deploy.username=${NEXUS_USER} \
