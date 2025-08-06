@@ -1,83 +1,87 @@
 pipeline {
     agent any
-    
-      parameters {
+
+    parameters {
         string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
     }
 
     tools {
-        maven 'Maven 3'
+        maven 'Maven 3' // Make sure this matches the name in Jenkins -> Global Tool Configuration
     }
 
     environment {
-        SONARQUBE = 'sonarqube-server' // name configured in Jenkins global config
-        SONAR_TOKEN = credentials('sonar-token') // store token in Jenkins credentials
-        NEXUS_URL = "http://65.2.127.21:32247"
-        NEXUS_REPO = "maven-snapshots"
-        ARTIFACT_ID = "hello-world"
-        GROUP_ID = "com.example"
-        VERSION = "1.0-SNAPSHOT"
+        SONARQUBE = 'SonarQube' // Jenkins SonarQube server config name
+        SONAR_TOKEN = credentials('sonar-token') // Add your token in Jenkins credentials
+        NEXUS_CREDS = credentials('nexus-creds') // Replace with Jenkins ID for Nexus user:pass
+        NEXUS_URL = "http://65.2.127.21:32247/repository/maven-snapshots"
+        NEXUS_DOCKER_REPO = "65.2.127.21:32247"
+        IMAGE_NAME = "sonarqube-app"
+        REPO_NAME = "Sonarqube"
+        PROJECT_PATH = "hello-world-maven/hello-world"
     }
 
     stages {
-        stage('Pull from SCM') {
+        stage('SCM Checkout') {
             steps {
-                echo "📥 Cloning source code from GitHub"
-                git branch: "${env.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
+                echo "📥 Cloning branch: ${params.BRANCH_NAME}"
+                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                echo "🔍 Running SonarQube scan..."
-                withSonarQubeEnv("${SONARQUBE}") {
-                    dir('hello-world-maven/hello-world') {
-                        sh "mvn clean verify sonar:sonar -Dsonar.projectKey=Sonarqube -Dsonar.token=${SONAR_TOKEN}"
+                echo "🔍 Running SonarQube analysis..."
+                dir("${PROJECT_PATH}") {
+                    withSonarQubeEnv("${SONARQUBE}") {
+                        sh """
+                            mvn clean verify sonar:sonar \
+                                -Dsonar.projectKey=sonarqube-app \
+                                -Dsonar.login=$SONAR_TOKEN
+                        """
                     }
                 }
             }
         }
 
-        stage('Build Artifact') {
+        stage('Build WAR Artifact') {
             steps {
-                echo "🔧 Building WAR file..."
-                dir('hello-world-maven/hello-world') {
-                    sh "mvn package"
+                echo "🏗 Building WAR file..."
+                dir("${PROJECT_PATH}") {
+                    sh 'mvn clean package'
                 }
             }
         }
 
-        stage('Upload to Nexus') {
+        stage('Upload Artifact to Nexus') {
             steps {
                 echo "📦 Uploading WAR to Nexus..."
-                dir('hello-world-maven/hello-world') {
+                dir("${PROJECT_PATH}") {
                     sh """
-                        mvn deploy:deploy-file \
-                        -DgroupId=${GROUP_ID} \
-                        -DartifactId=${ARTIFACT_ID} \
-                        -Dversion=${VERSION} \
-                        -Dpackaging=war \
-                        -Dfile=target/${ARTIFACT_ID}-${VERSION}.war \
-                        -DrepositoryId=nexus \
-                        -Durl=${NEXUS_URL}/repository/${NEXUS_REPO}
+                        mvn deploy -DaltDeploymentRepository=nexus::default::${NEXUS_URL} \
+                            -DskipTests \
+                            -Dusername=${NEXUS_CREDS_USR} \
+                            -Dpassword=${NEXUS_CREDS_PSW}
                     """
                 }
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Docker Image from Nexus WAR') {
             steps {
-                echo "🐳 Building Docker Image using WAR from Nexus..."
-                sh 'docker build -t hello-world:v1 .'
+                echo "🐳 Building Docker image using WAR from Nexus..."
+                sh """
+                    docker build -t ${IMAGE_NAME}:latest .
+                """
             }
         }
 
-        stage('Push to Nexus Docker Registry') {
+        stage('Push Docker Image to Nexus Registry') {
             steps {
-                echo "📤 Pushing Docker Image to Nexus Docker Registry..."
+                echo "📤 Pushing Docker image to Nexus Docker Registry..."
                 sh """
-                    docker tag hello-world:v1 65.2.127.21:32247/hello-world:v1
-                    docker push 65.2.127.21:32247/hello-world:v1
+                    echo ${NEXUS_CREDS_PSW} | docker login ${NEXUS_DOCKER_REPO} -u ${NEXUS_CREDS_USR} --password-stdin
+                    docker tag ${IMAGE_NAME}:latest ${NEXUS_DOCKER_REPO}/${IMAGE_NAME}:latest
+                    docker push ${NEXUS_DOCKER_REPO}/${IMAGE_NAME}:latest
                 """
             }
         }
