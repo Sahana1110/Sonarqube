@@ -2,16 +2,16 @@ pipeline {
     agent any
 
     environment {
-        SONARQUBE_SERVER = 'SonarQube' // Jenkins > Configure System
-        SONARQUBE_TOKEN = credentials('sonar-token')
-        TOMCAT_KEY = credentials('tomcat-ec2-key') // SSH key for Tomcat EC2
+        SONARQUBE_SERVER = 'SonarQube' // Name as configured in Jenkins > Manage Jenkins > Configure System
+        SONARQUBE_TOKEN = credentials('sonar-token') // Jenkins credential for SonarQube token
+        TOMCAT_KEY = credentials('tomcat-ec2-key') // SSH private key for remote Tomcat EC2
         NEXUS_URL = 'http://65.2.127.21:32247'
         NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots/"
         GROUP_ID = 'com.example'
         ARTIFACT_ID = 'hello-world'
         VERSION = '1.0-SNAPSHOT'
         WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
-        MAVEN_HOME = tool 'Maven 3'
+        MAVEN_HOME = tool 'Maven 3' // Tool name as defined in Jenkins Tools config
     }
 
     parameters {
