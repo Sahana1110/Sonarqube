@@ -11,10 +11,11 @@ pipeline {
         GROUP_ID = 'com.example'
         ARTIFACT_ID = 'hello-world'
         VERSION = '1.0-SNAPSHOT'
-        WAR_NAME = 'hello-world-1.0-20250806.145804-1.war'   // 🔥 Actual filename from Nexus
+        WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
     }
 
     stages {
+
         stage('Checkout SCM') {
             steps {
                 git branch: 'dev', url: 'https://github.com/Sahana1110/Sonarqube.git'
@@ -34,7 +35,9 @@ pipeline {
         stage('Build & Deploy Artifact to Nexus') {
             steps {
                 dir('hello-world-maven/hello-world') {
-                    sh "${MAVEN_HOME}/bin/mvn deploy -DskipTests"
+                    sh """
+                        ${MAVEN_HOME}/bin/mvn deploy -DskipTests -DuniqueVersion=false
+                    """
                 }
             }
         }
