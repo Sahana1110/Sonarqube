@@ -58,7 +58,20 @@ pipeline {
                     def warName = "${ARTIFACT_ID}-${versionResolved}.war"
                     env.WAR_NAME = warName
 
-                    echo "Resolved latest WAR: ${env.WAR_NAME}"
+                    echo "Resolved WAR: ${env.WAR_NAME}"
+                }
+            }
+        }
+
+        stage('Download WAR from Nexus') {
+            steps {
+                dir('hello-world-maven/hello-world') {
+                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                        sh """
+                            curl -u $NEXUS_USER:$NEXUS_PASS -O ${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${env.WAR_NAME}
+                            mv ${env.WAR_NAME} ${ARTIFACT_ID}.war
+                        """
+                    }
                 }
             }
         }
@@ -67,17 +80,14 @@ pipeline {
             steps {
                 dir('hello-world-maven/hello-world') {
                     script {
-                        def warUrl = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${env.WAR_NAME}"
-                        def imageTag = "${ARTIFACT_ID}:latest"
-
                         writeFile file: 'Dockerfile', text: """
                         FROM tomcat:9.0
-                        ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+                        COPY ${ARTIFACT_ID}.war /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
                         EXPOSE 8080
                         CMD ["catalina.sh", "run"]
                         """
 
-                        sh "docker build -t ${imageTag} ."
+                        sh "docker build -t ${ARTIFACT_ID}:latest ."
                     }
                 }
             }
@@ -96,7 +106,7 @@ pipeline {
                         """
                     }
 
-                    echo "Pushed Docker image: ${fullImage}"
+                    echo "✅ Docker image pushed: ${fullImage}"
                 }
             }
         }
