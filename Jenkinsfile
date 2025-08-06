@@ -14,7 +14,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout SCM') {
             steps {
                 git branch: 'dev', url: 'https://github.com/Sahana1110/Sonarqube.git'
@@ -47,7 +46,6 @@ pipeline {
                     def metadataUrl = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
                     def metadata = sh(script: "curl -s ${metadataUrl}", returnStdout: true).trim()
 
-                    // Extract the WAR filename from the <value> tag with .war extension
                     def warMatch = metadata =~ /<extension>war<\/extension>\s*<value>(.*?)<\/value>/
                     if (!warMatch) {
                         error "WAR file not found in Nexus metadata!"
@@ -88,11 +86,13 @@ pipeline {
 
                     withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                         sh """
-                            docker login ${registry} -u ${NEXUS_USER} -p ${NEXUS_PASS}
+                            echo \$NEXUS_PASS | docker login ${registry} -u \$NEXUS_USER --password-stdin
                             docker tag ${ARTIFACT_ID}:latest ${imageName}
                             docker push ${imageName}
                         """
                     }
+
+                    echo "Pushed image: ${imageName}"
                 }
             }
         }
