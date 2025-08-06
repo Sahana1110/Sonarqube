@@ -1,27 +1,32 @@
 pipeline {
     agent any
 
-    parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
-    }
-
-    tools {
-        maven 'Maven 3'
-    }
-
     environment {
-        SONARQUBE = 'SonarQube'
-        SONAR_TOKEN = credentials('sonar-token')  // Jenkins credentials
-        TOMCAT_USER = 'ec2-user'
-        TOMCAT_HOST = '15.206.164.80' // Your Tomcat EC2 public IP
-        TOMCAT_WEBAPPS = '/opt/tomcat/webapps'
+        SONAR_TOKEN = credentials('sonar-token')
+        NEXUS_CREDENTIALS = credentials('nexus-creds')
+        SONARQUBE = 'SONARQUBE'
+        PROJECT_DIR = 'hello-world-maven/hello-world'
+        ARTIFACT_ID = 'hello-world'
+        VERSION = '1.0-SNAPSHOT'
+        GROUP_ID = 'com.example'
+        DOCKER_IMAGE = "65.2.127.21:32247/${ARTIFACT_ID}:${VERSION}"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                echo "📦 Checking out branch: ${params.BRANCH_NAME}"
-                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/mywebapp.git'
+                echo "📥 Checking out code..."
+                checkout scm
+            }
+        }
+
+        stage('Build & Package WAR') {
+            steps {
+                echo "⚙️ Building the Maven project..."
+                dir("${PROJECT_DIR}") {
+                    sh "mvn clean package -DskipTests"
+                }
             }
         }
 
@@ -29,41 +34,44 @@ pipeline {
             steps {
                 echo "🔎 Running SonarQube scan..."
                 withSonarQubeEnv("${SONARQUBE}") {
+                    dir("${PROJECT_DIR}") {
+                        sh """
+                            mvn clean verify sonar:sonar \
+                              -Dsonar.projectKey=${ARTIFACT_ID} \
+                              -Dsonar.token=$SONAR_TOKEN
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Upload Artifact to Nexus') {
+            steps {
+                echo "📦 Uploading WAR to Nexus..."
+                dir("${PROJECT_DIR}") {
                     sh """
-                        cd hello-world-maven/hello-world
-                        mvn clean verify sonar:sonar -Dsonar.projectKey=mywebapp -Dsonar.token=$SONAR_TOKEN
+                        mvn deploy \
+                          -DaltDeploymentRepository=nexus::default::http://65.2.127.21:32247/repository/maven-snapshots/ \
+                          -DskipTests
                     """
                 }
             }
         }
 
-        stage('Quality Gate') {
+        stage('Build Docker Image') {
             steps {
-                echo "🛡️ Waiting for Quality Gate..."
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
+                echo "🐳 Building Docker image..."
+                sh "docker build -t ${DOCKER_IMAGE} ."
             }
         }
 
-        stage('Build WAR') {
+        stage('Push Docker Image to Nexus Docker Registry') {
             steps {
-                echo "🔨 Building the WAR file..."
-                sh 'mvn clean package'
-                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
-            }
-        }
-
-        stage('Deploy to Tomcat') {
-            steps {
-                echo "🚀 Deploying to remote Tomcat server..."
-
-                sshagent(credentials: ['tomcat-ec2-key']) {
-                    sh """
-                        scp target/*.war ${TOMCAT_USER}@${TOMCAT_HOST}:${TOMCAT_WEBAPPS}/hello-world.war
-                        ssh ${TOMCAT_USER}@${TOMCAT_HOST} 'sudo systemctl restart tomcat'
-                    """
-                }
+                echo "🚀 Pushing Docker image to Nexus..."
+                sh """
+                    echo "${NEXUS_CREDENTIALS_PSW}" | docker login 65.2.127.21:32247 --username ${NEXUS_CREDENTIALS_USR} --password-stdin
+                    docker push ${DOCKER_IMAGE}
+                """
             }
         }
     }
@@ -73,7 +81,7 @@ pipeline {
             echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo "❌ Pipeline failed!"
+            echo "❌ Pipeline failed."
         }
     }
 }
