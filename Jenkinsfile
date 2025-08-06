@@ -27,7 +27,7 @@ pipeline {
 
         stage('SonarQube Scan') {
             steps {
-                dir('Sonarqube/hello-world-maven/hello-world') {
+                dir('hello-world-maven/hello-world') {
                     withSonarQubeEnv("${SONARQUBE_SERVER}") {
                         sh "${MAVEN_HOME}/bin/mvn clean verify sonar:sonar -Dsonar.login=${SONARQUBE_TOKEN}"
                     }
@@ -37,7 +37,7 @@ pipeline {
 
         stage('Build & Deploy Artifact to Nexus') {
             steps {
-                dir('Sonarqube/hello-world-maven/hello-world') {
+                dir('hello-world-maven/hello-world') {
                     withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                         sh """
                             ${MAVEN_HOME}/bin/mvn clean deploy \
@@ -53,7 +53,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                dir('Sonarqube/hello-world-maven/hello-world') {
+                dir('hello-world-maven/hello-world') {
                     script {
                         def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
                         def imageTag = "${ARTIFACT_ID}:latest"
