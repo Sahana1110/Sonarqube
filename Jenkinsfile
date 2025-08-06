@@ -6,84 +6,107 @@ pipeline {
     }
 
     tools {
-        maven 'Maven 3' // Make sure this matches the name in Jenkins -> Global Tool Configuration
+        maven 'Maven 3'
     }
 
     environment {
-        SONARQUBE = 'SonarQube' // Jenkins SonarQube server config name
-        SONAR_TOKEN = credentials('sonar-token') // Add your token in Jenkins credentials
-        NEXUS_CREDS = credentials('nexus-creds') // Replace with Jenkins ID for Nexus user:pass
-        NEXUS_URL = "http://65.2.127.21:32247/repository/maven-snapshots"
-        NEXUS_DOCKER_REPO = "65.2.127.21:32247"
-        IMAGE_NAME = "sonarqube-app"
-        REPO_NAME = "Sonarqube"
-        PROJECT_PATH = "hello-world-maven/hello-world"
+        SONAR_URL = 'http://<your-sonarqube-url>' // Replace if needed
+        SONAR_TOKEN = credentials('sonar-token')
+        NEXUS_CREDS = credentials('nexus-creds')
+        NEXUS_URL = 'http://65.2.127.21:32247'
+        GROUP_ID = 'com/example'
+        ARTIFACT_ID = 'hello-world'
+        VERSION = '1.0-SNAPSHOT'
+        WAR_NAME = 'hello-world.war'
     }
 
     stages {
-        stage('SCM Checkout') {
+
+        stage('Checkout Code') {
             steps {
-                echo "📥 Cloning branch: ${params.BRANCH_NAME}"
                 git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('SonarQube Code Analysis') {
             steps {
-                echo "🔍 Running SonarQube analysis..."
-                dir("${PROJECT_PATH}") {
-                    withSonarQubeEnv("${SONARQUBE}") {
+                dir('Sonarqube/hello-world-maven/hello-world') {
+                    withSonarQubeEnv('MySonar') {
                         sh """
                             mvn clean verify sonar:sonar \
-                                -Dsonar.projectKey=sonarqube-app \
-                                -Dsonar.login=$SONAR_TOKEN
+                            -Dsonar.projectKey=hello-world \
+                            -Dsonar.host.url=${SONAR_URL} \
+                            -Dsonar.login=${SONAR_TOKEN}
                         """
                     }
                 }
             }
         }
 
-        stage('Build WAR Artifact') {
+        stage('Build WAR') {
             steps {
-                echo "🏗 Building WAR file..."
-                dir("${PROJECT_PATH}") {
+                dir('Sonarqube/hello-world-maven/hello-world') {
                     sh 'mvn clean package'
                 }
             }
         }
 
-        stage('Upload Artifact to Nexus') {
+        stage('Upload WAR to Nexus') {
             steps {
-                echo "📦 Uploading WAR to Nexus..."
-                dir("${PROJECT_PATH}") {
+                dir('Sonarqube/hello-world-maven/hello-world') {
                     sh """
-                        mvn deploy -DaltDeploymentRepository=nexus::default::${NEXUS_URL} \
-                            -DskipTests \
-                            -Dusername=${NEXUS_CREDS_USR} \
-                            -Dpassword=${NEXUS_CREDS_PSW}
+                        mvn deploy -DskipTests \
+                        -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_URL}/repository/maven-snapshots/ \
+                        -Dusername=${NEXUS_CREDS_USR} \
+                        -Dpassword=${NEXUS_CREDS_PSW}
                     """
                 }
             }
         }
 
-        stage('Build Docker Image from Nexus WAR') {
+        stage('Create Dockerfile') {
             steps {
-                echo "🐳 Building Docker image using WAR from Nexus..."
-                sh """
-                    docker build -t ${IMAGE_NAME}:latest .
-                """
+                writeFile file: 'Dockerfile', text: """\
+FROM tomcat:9.0
+ENV WAR_URL=${NEXUS_URL}/repository/maven-snapshots/${GROUP_ID}/${ARTIFACT_ID}/${VERSION}/${ARTIFACT_ID}-${VERSION}.war
+ADD \$WAR_URL /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+EXPOSE 8080
+CMD ["catalina.sh", "run"]
+"""
+                sh 'cat Dockerfile'
             }
         }
 
-        stage('Push Docker Image to Nexus Registry') {
+        stage('Build Docker Image') {
             steps {
-                echo "📤 Pushing Docker image to Nexus Docker Registry..."
-                sh """
-                    echo ${NEXUS_CREDS_PSW} | docker login ${NEXUS_DOCKER_REPO} -u ${NEXUS_CREDS_USR} --password-stdin
-                    docker tag ${IMAGE_NAME}:latest ${NEXUS_DOCKER_REPO}/${IMAGE_NAME}:latest
-                    docker push ${NEXUS_DOCKER_REPO}/${IMAGE_NAME}:latest
-                """
+                script {
+                    def imageName = "${ARTIFACT_ID}:${VERSION}".toLowerCase()
+                    sh "docker build -t ${imageName} ."
+                }
             }
+        }
+
+        stage('Push Docker Image to Nexus') {
+            steps {
+                script {
+                    def imageName = "${ARTIFACT_ID}:${VERSION}".toLowerCase()
+                    def nexusDockerUrl = "${NEXUS_URL}/repository/docker-hosted/"
+                    sh """
+                        echo "${NEXUS_CREDS_PSW}" | docker login ${NEXUS_URL} -u "${NEXUS_CREDS_USR}" --password-stdin
+                        docker tag ${imageName} ${NEXUS_URL}/hello-world:${VERSION}
+                        docker push ${NEXUS_URL}/hello-world:${VERSION}
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Pipeline completed successfully!'
+        }
+        failure {
+            echo '❌ Pipeline failed!'
         }
     }
 }
