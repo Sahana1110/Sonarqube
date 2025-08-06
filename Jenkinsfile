@@ -13,7 +13,7 @@ pipeline {
         SONARQUBE = 'SonarQube'
         SONAR_TOKEN = credentials('sonar-token')  // Jenkins credentials
         TOMCAT_USER = 'ec2-user'
-        TOMCAT_HOST = '15.206.164.80' // Replace with your Tomcat EC2 public IP
+        TOMCAT_HOST = '15.206.164.80' // Your Tomcat EC2 public IP
         TOMCAT_WEBAPPS = '/opt/tomcat/webapps'
     }
 
@@ -58,10 +58,13 @@ pipeline {
         stage('Deploy to Tomcat') {
             steps {
                 echo "🚀 Deploying to remote Tomcat server..."
-                sh """
-                    scp -i ~/.ssh/id_rsa target/*.war ${TOMCAT_USER}@${TOMCAT_HOST}:${TOMCAT_WEBAPPS}/hello-world.war
-                    ssh -i ~/.ssh/id_rsa ${TOMCAT_USER}@${TOMCAT_HOST} 'sudo systemctl restart tomcat'
-                """
+
+                sshagent(credentials: ['tomcat-ec2-key']) {
+                    sh """
+                        scp target/*.war ${TOMCAT_USER}@${TOMCAT_HOST}:${TOMCAT_WEBAPPS}/hello-world.war
+                        ssh ${TOMCAT_USER}@${TOMCAT_HOST} 'sudo systemctl restart tomcat'
+                    """
+                }
             }
         }
     }
