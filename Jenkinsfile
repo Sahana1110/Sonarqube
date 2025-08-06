@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    parameters {
+        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
+    }
+
     environment {
         SONARQUBE_SERVER = 'SonarQube'
         SONARQUBE_TOKEN = credentials('sonar-token')
