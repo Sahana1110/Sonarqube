@@ -32,12 +32,13 @@ pipeline {
             steps {
                 dir('Sonarqube/hello-world-maven/hello-world') {
                     withSonarQubeEnv('SonarQube') {
-                        sh """
-                            mvn clean verify sonar:sonar \
-                            -Dsonar.projectKey=hello-world \
-                            -Dsonar.host.url=${SONAR_URL} \
-                            -Dsonar.login=${SONAR_TOKEN}
-                        """
+                        sh '''
+    mvn clean verify sonar:sonar \
+    -Dsonar.projectKey=hello-world \
+    -Dsonar.host.url=http://13.201.228.76:30007 \
+    -Dsonar.login=$SONAR_TOKEN
+'''
+
                     }
                 }
             }
