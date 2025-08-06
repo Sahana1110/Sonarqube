@@ -2,57 +2,56 @@ pipeline {
     agent any
 
     environment {
-        SONAR_TOKEN = credentials('sonar-token')
-        NEXUS_CREDENTIALS = credentials('nexus-creds')
-        SONARQUBE = 'SONARQUBE'
-        PROJECT_DIR = 'hello-world-maven/hello-world'
-        ARTIFACT_ID = 'hello-world'
-        VERSION = '1.0-SNAPSHOT'
-        GROUP_ID = 'com.example'
-        DOCKER_IMAGE = "65.2.127.21:32247/${ARTIFACT_ID}:${VERSION}"
+        SONARQUBE = 'sonarqube-server' // name configured in Jenkins global config
+        SONAR_TOKEN = credentials('sonar-token') // store token in Jenkins credentials
+        NEXUS_URL = "http://65.2.127.21:32247"
+        NEXUS_REPO = "maven-snapshots"
+        ARTIFACT_ID = "hello-world"
+        GROUP_ID = "com.example"
+        VERSION = "1.0-SNAPSHOT"
     }
 
     stages {
-
-        stage('Checkout') {
+        stage('Pull from SCM') {
             steps {
-                echo "📥 Checking out code..."
-                checkout scm
-            }
-        }
-
-        stage('Build & Package WAR') {
-            steps {
-                echo "⚙️ Building the Maven project..."
-                dir("${PROJECT_DIR}") {
-                    sh "mvn clean package -DskipTests"
-                }
+                echo "📥 Cloning source code from GitHub"
+                git branch: "${env.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                echo "🔎 Running SonarQube scan..."
+                echo "🔍 Running SonarQube scan..."
                 withSonarQubeEnv("${SONARQUBE}") {
-                    dir("${PROJECT_DIR}") {
-                        sh """
-                            mvn clean verify sonar:sonar \
-                              -Dsonar.projectKey=${ARTIFACT_ID} \
-                              -Dsonar.token=$SONAR_TOKEN
-                        """
+                    dir('hello-world-maven/hello-world') {
+                        sh "mvn clean verify sonar:sonar -Dsonar.projectKey=Sonarqube -Dsonar.token=${SONAR_TOKEN}"
                     }
                 }
             }
         }
 
-        stage('Upload Artifact to Nexus') {
+        stage('Build Artifact') {
+            steps {
+                echo "🔧 Building WAR file..."
+                dir('hello-world-maven/hello-world') {
+                    sh "mvn package"
+                }
+            }
+        }
+
+        stage('Upload to Nexus') {
             steps {
                 echo "📦 Uploading WAR to Nexus..."
-                dir("${PROJECT_DIR}") {
+                dir('hello-world-maven/hello-world') {
                     sh """
-                        mvn deploy \
-                          -DaltDeploymentRepository=nexus::default::http://65.2.127.21:32247/repository/maven-snapshots/ \
-                          -DskipTests
+                        mvn deploy:deploy-file \
+                        -DgroupId=${GROUP_ID} \
+                        -DartifactId=${ARTIFACT_ID} \
+                        -Dversion=${VERSION} \
+                        -Dpackaging=war \
+                        -Dfile=target/${ARTIFACT_ID}-${VERSION}.war \
+                        -DrepositoryId=nexus \
+                        -Durl=${NEXUS_URL}/repository/${NEXUS_REPO}
                     """
                 }
             }
@@ -60,28 +59,19 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo "🐳 Building Docker image..."
-                sh "docker build -t ${DOCKER_IMAGE} ."
+                echo "🐳 Building Docker Image using WAR from Nexus..."
+                sh 'docker build -t hello-world:v1 .'
             }
         }
 
-        stage('Push Docker Image to Nexus Docker Registry') {
+        stage('Push to Nexus Docker Registry') {
             steps {
-                echo "🚀 Pushing Docker image to Nexus..."
+                echo "📤 Pushing Docker Image to Nexus Docker Registry..."
                 sh """
-                    echo "${NEXUS_CREDENTIALS_PSW}" | docker login 65.2.127.21:32247 --username ${NEXUS_CREDENTIALS_USR} --password-stdin
-                    docker push ${DOCKER_IMAGE}
+                    docker tag hello-world:v1 65.2.127.21:32247/hello-world:v1
+                    docker push 65.2.127.21:32247/hello-world:v1
                 """
             }
-        }
-    }
-
-    post {
-        success {
-            echo "✅ Pipeline completed successfully!"
-        }
-        failure {
-            echo "❌ Pipeline failed."
         }
     }
 }
