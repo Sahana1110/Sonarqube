@@ -46,14 +46,15 @@ pipeline {
                 script {
                     def metadataUrl = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
                     def metadata = sh(script: "curl -s ${metadataUrl}", returnStdout: true).trim()
-                    def warName = metadata.find(/<value>(.*\.war)<\/value>/) { full, name -> name }
 
-                    if (!warName) {
+                    def matcher = metadata =~ /<snapshotVersion>\\s*<extension>war<\\/extension>\\s*<value>(.*?)<\\/value>/s
+                    if (!matcher.find()) {
                         error "WAR file not found in Nexus metadata!"
                     }
 
-                    env.WAR_NAME = warName
-                    echo "Latest WAR from Nexus: ${env.WAR_NAME}"
+                    def versionedSnapshot = matcher.group(1)
+                    env.WAR_NAME = "${ARTIFACT_ID}-${versionedSnapshot}.war"
+                    echo "Resolved WAR: ${env.WAR_NAME}"
                 }
             }
         }
