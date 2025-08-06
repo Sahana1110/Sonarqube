@@ -6,8 +6,11 @@ pipeline {
         SONARQUBE_TOKEN = credentials('sonar-token')
         TOMCAT_KEY = credentials('tomcat-ec2-key')
         MAVEN_HOME = tool 'Maven 3'
-        NEXUS_URL = 'http://65.2.127.21:32247'
+
+        NEXUS_URL = 'http://65.2.127.21:30937'
         NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots"
+        NEXUS_DOCKER_REGISTRY = '65.2.127.21:30578'
+
         GROUP_ID = 'com.example'
         ARTIFACT_ID = 'hello-world'
         VERSION = '1.0-SNAPSHOT'
@@ -33,9 +36,7 @@ pipeline {
         stage('Build & Upload to Nexus') {
             steps {
                 dir('hello-world-maven/hello-world') {
-                    sh """
-                        ${MAVEN_HOME}/bin/mvn deploy -DskipTests -DuniqueVersion=true
-                    """
+                    sh "${MAVEN_HOME}/bin/mvn deploy -DskipTests -DuniqueVersion=true"
                 }
             }
         }
@@ -46,14 +47,18 @@ pipeline {
                     def metadataUrl = "${NEXUS_SNAPSHOT_REPO}/${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
                     def metadata = sh(script: "curl -s ${metadataUrl}", returnStdout: true).trim()
 
-                    def warMatch = metadata =~ /<extension>war<\/extension>\s*<value>(.*?)<\/value>/
-                    if (!warMatch) {
-                        error "WAR file not found in Nexus metadata!"
+                    def timestamp = metadata.find(/<timestamp>(.*?)<\/timestamp>/) { _, ts -> ts }
+                    def buildNumber = metadata.find(/<buildNumber>(.*?)<\/buildNumber>/) { _, bn -> bn }
+
+                    if (!timestamp || !buildNumber) {
+                        error "Could not extract timestamp/buildNumber from metadata!"
                     }
 
-                    def warName = "${ARTIFACT_ID}-${warMatch[0][1]}.war"
+                    def versionResolved = "${VERSION.replace('-SNAPSHOT', '')}-${timestamp}-${buildNumber}"
+                    def warName = "${ARTIFACT_ID}-${versionResolved}.war"
                     env.WAR_NAME = warName
-                    echo "Latest WAR from Nexus: ${env.WAR_NAME}"
+
+                    echo "Resolved latest WAR: ${env.WAR_NAME}"
                 }
             }
         }
@@ -81,18 +86,17 @@ pipeline {
         stage('Push Docker Image to Nexus Registry') {
             steps {
                 script {
-                    def registry = '65.2.127.21:32247'
-                    def imageName = "${registry}/${ARTIFACT_ID}:latest"
+                    def fullImage = "${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:latest"
 
                     withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                         sh """
-                            echo \$NEXUS_PASS | docker login ${registry} -u \$NEXUS_USER --password-stdin
-                            docker tag ${ARTIFACT_ID}:latest ${imageName}
-                            docker push ${imageName}
+                            echo \$NEXUS_PASS | docker login ${NEXUS_DOCKER_REGISTRY} -u \$NEXUS_USER --password-stdin
+                            docker tag ${ARTIFACT_ID}:latest ${fullImage}
+                            docker push ${fullImage}
                         """
                     }
 
-                    echo "Pushed image: ${imageName}"
+                    echo "Pushed Docker image: ${fullImage}"
                 }
             }
         }
