@@ -11,7 +11,10 @@ pipeline {
 
     environment {
         SONARQUBE = 'SonarQube'
-        SONAR_TOKEN = credentials('sonar-token') // Jenkins credential ID
+        SONAR_TOKEN = credentials('sonar-token')  // Jenkins credentials
+        TOMCAT_USER = 'ec2-user'
+        TOMCAT_HOST = '15.206.164.80' // Replace with your Tomcat EC2 public IP
+        TOMCAT_WEBAPPS = '/opt/tomcat/webapps'
     }
 
     stages {
@@ -44,21 +47,31 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Build WAR') {
             steps {
-                echo "🔨 Building the Maven project..."
-                sh 'mvn package'
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                echo "🔨 Building the WAR file..."
+                sh 'mvn clean package'
+                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+            }
+        }
+
+        stage('Deploy to Tomcat') {
+            steps {
+                echo "🚀 Deploying to remote Tomcat server..."
+                sh """
+                    scp -i ~/.ssh/id_rsa target/*.war ${TOMCAT_USER}@${TOMCAT_HOST}:${TOMCAT_WEBAPPS}/hello-world.war
+                    ssh -i ~/.ssh/id_rsa ${TOMCAT_USER}@${TOMCAT_HOST} 'sudo systemctl restart tomcat'
+                """
             }
         }
     }
 
     post {
         success {
-            echo "✅ SUCCESS: Code scanned and built on branch ${params.BRANCH_NAME}"
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo "❌ FAILURE: Issue in scan or build"
+            echo "❌ Pipeline failed!"
         }
     }
 }
