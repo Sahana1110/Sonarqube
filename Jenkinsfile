@@ -15,6 +15,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout SCM') {
             steps {
                 git branch: 'dev', url: 'https://github.com/Sahana1110/Sonarqube.git'
@@ -34,15 +35,7 @@ pipeline {
         stage('Build & Deploy Artifact to Nexus') {
             steps {
                 dir('hello-world-maven/hello-world') {
-                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                        sh """
-                            ${MAVEN_HOME}/bin/mvn deploy \
-                            -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_SNAPSHOT_REPO} \
-                            -DskipTests \
-                            -Dmaven.deploy.username=${NEXUS_USER} \
-                            -Dmaven.deploy.password=${NEXUS_PASS}
-                        """
-                    }
+                    sh "${MAVEN_HOME}/bin/mvn deploy -DskipTests"
                 }
             }
         }
@@ -51,12 +44,12 @@ pipeline {
             steps {
                 dir('hello-world-maven/hello-world') {
                     script {
-                        def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
+                        def warPath = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
                         def imageTag = "${ARTIFACT_ID}:latest"
 
                         writeFile file: 'Dockerfile', text: """
                         FROM tomcat:9.0
-                        ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+                        ADD ${warPath} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
                         EXPOSE 8080
                         CMD ["catalina.sh", "run"]
                         """
@@ -87,12 +80,12 @@ pipeline {
         stage('Deploy to Tomcat EC2') {
             steps {
                 script {
-                    def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
+                    def warPath = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
                     def serverIP = '65.0.176.83'
 
                     sh """
                     ssh -o StrictHostKeyChecking=no -i ${TOMCAT_KEY} ec2-user@${serverIP} << EOF
-                        wget -O /tmp/${WAR_NAME} ${warUrl}
+                        wget -O /tmp/${WAR_NAME} ${warPath}
                         sudo mv /tmp/${WAR_NAME} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
                         sudo systemctl restart tomcat
                     EOF
