@@ -111,25 +111,24 @@ pipeline {
             }
         }
 
-        stage('Deploy to Tomcat EC2') {
-        steps {
-        withCredentials([sshUserPrivateKey(credentialsId: 'tomcat-ec2-key', keyFileVariable: 'TOMCAT_KEY')]) {
-            script {
-                def tomcatIP = '15.206.164.80'
-                def warURL = "http://65.2.127.21:30937/repository/maven-snapshots/com/example/hello-world/1.0-SNAPSHOT/${env.WAR_NAME}"
+         stage('Deploy to Tomcat EC2') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'tomcat-ec2-key', keyFileVariable: 'TOMCAT_KEY')]) {
+                    script {
+                        def tomcatIP = '15.206.164.80'
+                        def warURL = "http://65.2.127.21:30937/repository/maven-snapshots/com/example/hello-world/1.0-SNAPSHOT/${env.WAR_NAME}"
 
-                sh """
-                ssh -o StrictHostKeyChecking=no -i \$TOMCAT_KEY ec2-user@${tomcatIP} '
-                    wget -O /tmp/${env.WAR_NAME} ${warURL}
-                    sudo mv /tmp/${env.WAR_NAME} /usr/local/tomcat/webapps/hello-world.war
-                    sudo systemctl restart tomcat
-                '
-                """
+                        sh """
+                        ssh -o StrictHostKeyChecking=no -i \$TOMCAT_KEY ec2-user@${tomcatIP} '
+                            wget -O /tmp/${env.WAR_NAME} ${warURL}
+                            sudo mv /tmp/${env.WAR_NAME} /usr/local/tomcat/webapps/hello-world.war
+                            sudo systemctl restart tomcat
+                        '
+                        """
+                    }
+                }
             }
         }
-    }
-}
-
 
     post {
         always {
