@@ -6,9 +6,7 @@ pipeline {
     }
 
     environment {
-        SONARQUBE = 'SonarQube'                     // Jenkins SonarQube server name
-        SONAR_TOKEN = credentials('sonar-token')    // Jenkins Credentials ID
-        PROJECT_DIR = 'hello-world-maven/hello-world'
+
     }
 
     stages {
@@ -43,31 +41,16 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Build WAR') {
             steps {
-                echo "🔨 Building the Maven project..."
-                dir("${PROJECT_DIR}") {
-                    sh 'mvn package'
-                }
-            }
-        }
 
-        stage('Archive Artifact') {
-            steps {
-                echo "📦 Archiving WAR file..."
-                dir("${PROJECT_DIR}") {
-                    archiveArtifacts artifacts: 'target/*.war', fingerprint: true
-                }
             }
         }
     }
 
     post {
         success {
-            echo "✅ Pipeline completed successfully on branch ${params.BRANCH_NAME}"
-        }
-        failure {
-            echo "❌ Pipeline failed during one of the stages"
+
         }
     }
 }
