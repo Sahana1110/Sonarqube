@@ -2,16 +2,16 @@ pipeline {
     agent any
 
     environment {
-        SONARQUBE_SERVER = 'SonarQube' // Name as configured in Jenkins > Manage Jenkins > Configure System
+        SONARQUBE_SERVER = 'SonarQube' // Name configured in Jenkins > Manage Jenkins > Configure System
         SONARQUBE_TOKEN = credentials('sonar-token') // Jenkins credential for SonarQube token
-        TOMCAT_KEY = credentials('tomcat-ec2-key') // SSH private key for remote Tomcat EC2
+        TOMCAT_KEY = credentials('tomcat-ec2-key') // SSH key to Tomcat EC2
         NEXUS_URL = 'http://65.2.127.21:32247'
         NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots/"
         GROUP_ID = 'com.example'
         ARTIFACT_ID = 'hello-world'
         VERSION = '1.0-SNAPSHOT'
         WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
-        MAVEN_HOME = tool 'Maven 3' // Tool name as defined in Jenkins Tools config
+        MAVEN_HOME = tool 'Maven 3' // Defined in Jenkins global tool config
     }
 
     parameters {
@@ -36,12 +36,12 @@ pipeline {
             }
         }
 
-        stage('Build and Deploy to Nexus') {
+        stage('Build & Upload Artifact to Nexus') {
             steps {
                 dir('hello-world-maven/hello-world') {
                     withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                         sh """
-                            ${MAVEN_HOME}/bin/mvn clean deploy \
+                            ${MAVEN_HOME}/bin/mvn deploy \
                             -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_SNAPSHOT_REPO} \
                             -DskipTests \
                             -Dmaven.deploy.username=${NEXUS_USER} \
@@ -57,11 +57,11 @@ pipeline {
                 dir('hello-world-maven/hello-world') {
                     script {
                         def imageTag = "${ARTIFACT_ID}:latest"
-                        def warDownloadUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
+                        def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
 
                         writeFile file: 'Dockerfile', text: """
                         FROM tomcat:9.0
-                        ADD ${warDownloadUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+                        ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
                         EXPOSE 8080
                         CMD ["catalina.sh", "run"]
                         """
@@ -89,7 +89,7 @@ pipeline {
             }
         }
 
-        stage('Deploy to Tomcat Server') {
+        stage('Deploy WAR to Tomcat EC2') {
             steps {
                 script {
                     def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
