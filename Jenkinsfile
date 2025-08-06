@@ -30,9 +30,8 @@ pipeline {
                 echo "🔎 Running SonarQube scan..."
                 withSonarQubeEnv("${SONARQUBE}") {
                     sh """
-                        mvn clean verify sonar:sonar \
-                        -Dsonar.projectKey=mywebapp \
-                        -Dsonar.token=${SONAR_TOKEN}
+                        cd hello-world-maven
+                        mvn clean verify sonar:sonar -Dsonar.projectKey=mywebapp -Dsonar.token=$SONAR_TOKEN
                     """
                 }
             }
