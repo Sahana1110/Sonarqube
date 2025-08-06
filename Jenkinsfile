@@ -1,5 +1,13 @@
 pipeline {
     agent any
+    
+      parameters {
+        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
+    }
+
+    tools {
+        maven 'Maven 3'
+    }
 
     environment {
         SONARQUBE = 'sonarqube-server' // name configured in Jenkins global config
