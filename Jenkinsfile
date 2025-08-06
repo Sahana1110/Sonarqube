@@ -1,14 +1,6 @@
 pipeline {
     agent any
 
-    parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
-    }
-
-    tools {
-        maven 'Maven 3'
-    }
-
     environment {
     SONARQUBE_SERVER = 'SonarQube' // name in Jenkins > Configure System > SonarQube server config
     SONARQUBE_TOKEN = credentials('sonar-token') // Jenkins credential id
