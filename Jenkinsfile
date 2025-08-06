@@ -26,7 +26,7 @@ pipeline {
 
         stage('SonarQube Code Analysis') {
             steps {
-                dir('Sonarqube/hello-world-maven/hello-world') {
+                dir('hello-world-maven/hello-world') {
                     withSonarQubeEnv('SonarQube') {
                         sh 'mvn clean verify sonar:sonar'
                     }
