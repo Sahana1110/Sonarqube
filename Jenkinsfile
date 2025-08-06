@@ -1,67 +1,105 @@
 pipeline {
     agent any
 
+    environment {
+        SONARQUBE_SERVER = 'SonarQube'                          // Jenkins -> Configure System -> SonarQube server name
+        SONARQUBE_TOKEN = credentials('sonar-token')            // Jenkins credential for Sonar token
+        TOMCAT_KEY = credentials('tomcat-ec2-key')              // SSH private key for Tomcat EC2
+        MAVEN_HOME = tool 'Maven 3'                             // Maven tool name in Jenkins
+        NEXUS_URL = 'http://65.2.127.21:32247'
+        NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots/"
+        GROUP_ID = 'com.example'
+        ARTIFACT_ID = 'hello-world'
+        VERSION = '1.0-SNAPSHOT'
+        WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
+    }
+
     parameters {
         string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
     }
 
-    tools {
-        maven 'Maven 3'
-    }
-
-    environment {
-        SONARQUBE = 'SonarQube'
-        SONAR_TOKEN = credentials('sonar-token')  // Jenkins credentials
-        TOMCAT_USER = 'ec2-user'
-        TOMCAT_HOST = '15.206.164.80' // Your Tomcat EC2 public IP
-        TOMCAT_WEBAPPS = '/opt/tomcat/webapps'
-    }
-
     stages {
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
-                echo "📦 Checking out branch: ${params.BRANCH_NAME}"
-                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/mywebapp.git'
+                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Sahana1110/Sonarqube.git'
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('SonarQube Scan') {
             steps {
-                echo "🔎 Running SonarQube scan..."
-                withSonarQubeEnv("${SONARQUBE}") {
-                    sh """
-                        cd hello-world-maven/hello-world
-                        mvn clean verify sonar:sonar -Dsonar.projectKey=mywebapp -Dsonar.token=$SONAR_TOKEN
-                    """
+                dir('Sonarqube/hello-world-maven/hello-world') {
+                    withSonarQubeEnv("${SONARQUBE_SERVER}") {
+                        sh "${MAVEN_HOME}/bin/mvn clean verify sonar:sonar -Dsonar.login=${SONARQUBE_TOKEN}"
+                    }
                 }
             }
         }
 
-        stage('Quality Gate') {
+        stage('Build & Deploy Artifact to Nexus') {
             steps {
-                echo "🛡️ Waiting for Quality Gate..."
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                dir('Sonarqube/hello-world-maven/hello-world') {
+                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                        sh """
+                            ${MAVEN_HOME}/bin/mvn clean deploy \
+                            -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_SNAPSHOT_REPO} \
+                            -DskipTests \
+                            -Dmaven.deploy.username=${NEXUS_USER} \
+                            -Dmaven.deploy.password=${NEXUS_PASS}
+                        """
+                    }
                 }
             }
         }
 
-        stage('Build WAR') {
+        stage('Build Docker Image') {
             steps {
-                echo "🔨 Building the WAR file..."
-                sh 'mvn clean package'
-                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+                dir('Sonarqube/hello-world-maven/hello-world') {
+                    script {
+                        def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
+                        def imageTag = "${ARTIFACT_ID}:latest"
+
+                        writeFile file: 'Dockerfile', text: """
+                        FROM tomcat:9.0
+                        ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+                        EXPOSE 8080
+                        CMD ["catalina.sh", "run"]
+                        """
+
+                        sh "docker build -t ${imageTag} ."
+                    }
+                }
             }
         }
 
-        stage('Deploy to Tomcat') {
+        stage('Push Docker Image to Nexus Registry') {
             steps {
-                echo "🚀 Deploying to remote Tomcat server..."
+                script {
+                    def registry = '65.2.127.21:32247'
+                    def imageName = "${registry}/${ARTIFACT_ID}:latest"
 
-                sshagent(credentials: ['tomcat-ec2-key']) {
+                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                        sh """
+                            docker login ${registry} -u ${NEXUS_USER} -p ${NEXUS_PASS}
+                            docker tag ${ARTIFACT_ID}:latest ${imageName}
+                            docker push ${imageName}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Tomcat EC2') {
+            steps {
+                script {
+                    def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
+                    def serverIP = '65.0.176.83'
+
                     sh """
-                        scp target/*.war ${TOMCAT_USER}@${TOMCAT_HOST}:${TOMCAT_WEBAPPS}/hello-world.war
-                        ssh ${TOMCAT_USER}@${TOMCAT_HOST} 'sudo systemctl restart tomcat'
+                    ssh -o StrictHostKeyChecking=no -i ${TOMCAT_KEY} ec2-user@${serverIP} << EOF
+                        wget -O /tmp/${WAR_NAME} ${warUrl}
+                        sudo mv /tmp/${WAR_NAME} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+                        sudo systemctl restart tomcat
+                    EOF
                     """
                 }
             }
@@ -69,11 +107,8 @@ pipeline {
     }
 
     post {
-        success {
-            echo "✅ Pipeline completed successfully!"
-        }
-        failure {
-            echo "❌ Pipeline failed!"
+        always {
+            cleanWs()
         }
     }
 }

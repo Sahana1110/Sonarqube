@@ -31,6 +31,18 @@
         </dependency>
     </dependencies>
 
+    <!-- Optional: Add Nexus repo details if you're using mvn deploy -->
+    <distributionManagement>
+        <repository>
+            <id>nexus-releases</id>
+            <url>http://65.2.127.21:32247/repository/maven-releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>nexus-snapshots</id>
+            <url>http://65.2.127.21:32247/repository/maven-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <build>
         <finalName>hello-world</finalName>
 
@@ -56,7 +68,7 @@
                 </configuration>
             </plugin>
 
-            <!-- ✅ SonarQube Plugin -->
+            <!-- SonarQube Plugin -->
             <plugin>
                 <groupId>org.sonarsource.scanner.maven</groupId>
                 <artifactId>sonar-maven-plugin</artifactId>
@@ -65,3 +77,4 @@
         </plugins>
     </build>
 </project>
+
