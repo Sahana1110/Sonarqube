@@ -2,19 +2,23 @@ pipeline {
     agent any
 
     environment {
-        SONARQUBE_SERVER = 'SonarQube'                       // Jenkins -> SonarQube server config name
-        SONARQUBE_TOKEN  = credentials('sonar-token')        // Jenkins credential for SonarQube
-        MAVEN_HOME       = tool 'Maven 3'                    // Maven tool in Jenkins
-        NEXUS_URL        = 'http://13.235.74.86:30937'
+        SONARQUBE_SERVER = 'SonarQube'               // Jenkins -> Configure System -> SonarQube server name
+        SONARQUBE_TOKEN = credentials('sonar-token') // SonarQube token credential
+        MAVEN_HOME = tool 'Maven 3'                  // Maven tool configured in Jenkins
+
+        // Nexus URLs
+        NEXUS_URL = 'http://13.235.74.86:30937'
         NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots/"
-        GROUP_ID         = 'com.example'
-        ARTIFACT_ID      = 'hello-world'
-        VERSION          = '1.0-SNAPSHOT'
-        WAR_NAME         = "${ARTIFACT_ID}-${VERSION}.war"
+
+        // Artifact details
+        GROUP_ID = 'com.example'
+        ARTIFACT_ID = 'hello-world'
+        VERSION = '1.0-SNAPSHOT'
+        WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
     }
 
     parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Branch to build')
+        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
     }
 
     stages {
@@ -28,12 +32,21 @@ pipeline {
             steps {
                 dir('hello-world-maven/hello-world') {
                     withSonarQubeEnv("${SONARQUBE_SERVER}") {
-                        sh """
-                        ${MAVEN_HOME}/bin/mvn clean verify sonar:sonar \
-                        -Dsonar.login=${SONARQUBE_TOKEN} \
-                        -Dsonar.host.url=http://3.110.224.10:30017
-                        """
+                        sh '''
+                            ${MAVEN_HOME}/bin/mvn clean verify sonar:sonar \
+                            -Dsonar.projectKey=hello-world \
+                            -Dsonar.host.url=http://3.110.224.10:30017 \
+                            -Dsonar.login=$SONARQUBE_TOKEN
+                        '''
                     }
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
@@ -41,16 +54,14 @@ pipeline {
         stage('Build & Deploy Artifact to Nexus') {
             steps {
                 dir('hello-world-maven/hello-world') {
-                    withCredentials([usernamePassword(credentialsId: 'nexus-creds',
-                                                      usernameVariable: 'NEXUS_USER',
-                                                      passwordVariable: 'NEXUS_PASS')]) {
-                        sh """
-                        ${MAVEN_HOME}/bin/mvn clean deploy \
-                        -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_SNAPSHOT_REPO} \
-                        -DskipTests \
-                        -Dmaven.deploy.username=${NEXUS_USER} \
-                        -Dmaven.deploy.password=${NEXUS_PASS}
-                        """
+                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                        sh '''
+                            ${MAVEN_HOME}/bin/mvn clean deploy \
+                            -DaltDeploymentRepository=snapshot-repo::default::http://13.235.74.86:30937/repository/maven-snapshots/ \
+                            -DskipTests \
+                            -Dmaven.deploy.username=$NEXUS_USER \
+                            -Dmaven.deploy.password=$NEXUS_PASS
+                        '''
                     }
                 }
             }
@@ -60,7 +71,7 @@ pipeline {
             steps {
                 dir('hello-world-maven/hello-world') {
                     script {
-                        def warUrl   = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
+                        def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
                         def imageTag = "${ARTIFACT_ID}:${env.BUILD_NUMBER}"
 
                         writeFile file: 'Dockerfile', text: """
@@ -71,7 +82,7 @@ pipeline {
                         """
 
                         sh "docker build -t ${imageTag} ."
-                        sh "docker tag ${imageTag} 13.235.74.86:30578/${imageTag}"
+                        env.IMAGE_TAG = imageTag
                     }
                 }
             }
@@ -80,30 +91,41 @@ pipeline {
         stage('Push Docker Image to Nexus Registry') {
             steps {
                 script {
-                    def registry  = '13.235.74.86:30578'
+                    def registry = '13.235.74.86:30578'   // Nexus Docker registry NodePort
                     def imageName = "${registry}/${ARTIFACT_ID}:${env.BUILD_NUMBER}"
 
-                    withCredentials([usernamePassword(credentialsId: 'nexus-creds',
-                                                      usernameVariable: 'NEXUS_USER',
-                                                      passwordVariable: 'NEXUS_PASS')]) {
+                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                         sh """
-                        docker login ${registry} -u ${NEXUS_USER} -p ${NEXUS_PASS}
-                        docker push ${imageName}
+                            docker login ${registry} -u $NEXUS_USER -p $NEXUS_PASS
+                            docker tag ${ARTIFACT_ID}:${env.BUILD_NUMBER} ${imageName}
+                            docker push ${imageName}
                         """
                     }
+                    env.FINAL_IMAGE = imageName
                 }
             }
         }
 
-        stage('Deploy to ArgoCD') {
+        stage('Deploy via ArgoCD') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'argo-cd',
-                                                  usernameVariable: 'ARGO_USER',
-                                                  passwordVariable: 'ARGO_PASS')]) {
+                script {
+                    // Assumes ArgoCD is already configured in Jenkins
+                    def appName = "hello-world-app"
+                    def argoServer = "http://13.235.74.86:31304"
+
                     sh """
-                    argocd login 13.235.74.86:31304 --username ${ARGO_USER} --password ${ARGO_PASS} --insecure
-                    argocd app set myapp --revision ${env.BUILD_NUMBER}
-                    argocd app sync myapp
+                        argocd login ${argoServer} --username admin --password YOUR_ARGO_PASS --insecure
+                        argocd app create ${appName} \
+                          --repo https://github.com/Sahana1110/Sonarqube.git \
+                          --path k8s-manifests \
+                          --dest-server https://kubernetes.default.svc \
+                          --dest-namespace default \
+                          --sync-policy automated \
+                          --self-heal \
+                          --upsert
+                        
+                        argocd app set ${appName} --parameter image.tag=${env.BUILD_NUMBER}
+                        argocd app sync ${appName}
                     """
                 }
             }
