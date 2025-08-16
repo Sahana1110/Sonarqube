@@ -62,32 +62,27 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                dir('hello-world-maven/hello-world') {
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        script {
-                            // Download latest snapshot metadata
-                            def metadataUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
-                            sh "curl -u admin:sms10 -o maven-metadata.xml ${metadataUrl}"
+                script {
+                    // Download latest snapshot metadata
+                    def metadataUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
+                    sh "curl -u admin:sms10 -o maven-metadata.xml ${metadataUrl}"
 
-                            // Extract actual WAR name (timestamped snapshot)
-                            def warFile = sh(script: "grep -oPm1 '(?<=<value>)[^<]+' maven-metadata.xml | grep '.war'", returnStdout: true).trim()
-                            def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${warFile}"
-                            def imageTag = "${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}"
+                    // Extract actual WAR name (timestamped snapshot)
+                    def warFile = sh(script: "grep -oPm1 '(?<=<value>)[^<]+' maven-metadata.xml | grep '.war'", returnStdout: true).trim()
+                    def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${warFile}"
+                    def imageTag = "${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}"
 
-                            writeFile file: 'Dockerfile', text: """
-                            FROM tomcat:9.0
-                            ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
-                            EXPOSE 8080
-                            CMD ["catalina.sh", "run"]
-                            """
+                    // Write Dockerfile dynamically with WAR URL
+                    writeFile file: 'Dockerfile', text: """
+                    FROM tomcat:9.0
+                    ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+                    EXPOSE 8080
+                    CMD ["catalina.sh", "run"]
+                    """
 
-                            sh """
-                            docker login -u $DOCKER_USER -p $DOCKER_PASS
-                            docker build -t ${imageTag} .
-                            """
-                        }
-                    }
+                    sh """
+                    docker build -t ${imageTag} .
+                    """
                 }
             }
         }
