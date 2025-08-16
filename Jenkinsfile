@@ -61,31 +61,31 @@ pipeline {
         }
 
         stage('Build Docker Image') {
-            steps {
-                script {
-                    // Download latest snapshot metadata
-                    def metadataUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
-                    sh "curl -u admin:sms10 -o maven-metadata.xml ${metadataUrl}"
+        steps {
+        script {
+            def metadataUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
+            sh "curl -u admin:sms10 -o maven-metadata.xml ${metadataUrl}"
 
-                    // Extract actual WAR name (timestamped snapshot)
-                    def warFile = sh(script: "grep -oPm1 '(?<=<value>)[^<]+' maven-metadata.xml | grep '.war'", returnStdout: true).trim()
-                    def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${warFile}"
-                    def imageTag = "${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}"
+            // Extract timestamped snapshot version
+            def snapshotVersion = sh(script: "grep -oPm1 '(?<=<value>)[^<]+' maven-metadata.xml", returnStdout: true).trim()
+            def warFile = "${ARTIFACT_ID}-${snapshotVersion}.war"
+            def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${warFile}"
+            def imageTag = "${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}"
 
-                    // Write Dockerfile dynamically with WAR URL
-                    writeFile file: 'Dockerfile', text: """
-                    FROM tomcat:9.0
-                    ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
-                    EXPOSE 8080
-                    CMD ["catalina.sh", "run"]
-                    """
+            writeFile file: 'Dockerfile', text: """
+            FROM tomcat:9.0
+            ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+            EXPOSE 8080
+            CMD ["catalina.sh", "run"]
+            """
 
-                    sh """
-                    docker build -t ${imageTag} .
-                    """
-                }
-            }
+            sh """
+            docker build -t ${imageTag} .
+            """
         }
+    }
+}
+
 
         stage('Push Docker Image to Nexus Registry') {
             steps {
