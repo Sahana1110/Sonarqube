@@ -101,12 +101,12 @@ pipeline {
 
         stage('Deploy to ArgoCD') {
     steps {
-        withCredentials([string(credentialsId: 'argo-id', variable: 'ARGO_PASS')]) {
+        withCredentials([usernamePassword(credentialsId: 'argo-cd', usernameVariable: 'ARGO_USER', passwordVariable: 'ARGO_PASS')]) {
             sh """
-            argocd login 13.235.74.86:31304 --username admin --password $ARGO_PASS --insecure
+            argocd login 13.235.74.86:31304 --username $ARGO_USER --password $ARGO_PASS --insecure
             argocd app sync my-k8s-app
             """
-         }
+           }
        }
     }
 }
