@@ -13,7 +13,6 @@ pipeline {
         GROUP_ID = 'com.example'
         ARTIFACT_ID = 'hello-world'
         VERSION = '1.0-SNAPSHOT'
-        WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
     }
 
     parameters {
@@ -67,7 +66,13 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
                         usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         script {
-                            def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
+                            // Download latest snapshot metadata
+                            def metadataUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
+                            sh "curl -u admin:sms10 -o maven-metadata.xml ${metadataUrl}"
+
+                            // Extract actual WAR name (timestamped snapshot)
+                            def warFile = sh(script: "grep -oPm1 '(?<=<value>)[^<]+' maven-metadata.xml | grep '.war'", returnStdout: true).trim()
+                            def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${warFile}"
                             def imageTag = "${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}"
 
                             writeFile file: 'Dockerfile', text: """
@@ -92,28 +97,4 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'nexus-creds',
                     usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                     sh """
-                    docker login ${NEXUS_DOCKER_REGISTRY} -u $NEXUS_USER -p $NEXUS_PASS
-                    docker push ${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}
-                    """
-                }
-            }
-        }
-
-        stage('Deploy to ArgoCD') {
-            steps {
-                script {
-                    sh """
-                    argocd login 13.235.74.86:31304 --username admin --password <ARGO_PASS> --insecure
-                    argocd app sync my-k8s-app
-                    """
-                }
-            }
-        }
-    }
-
-    post {
-        always {
-            cleanWs()
-        }
-    }
-}
+                    docker l
