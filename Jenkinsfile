@@ -97,4 +97,28 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'nexus-creds',
                     usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                     sh """
-                    docker l
+                    docker login ${NEXUS_DOCKER_REGISTRY} -u $NEXUS_USER -p $NEXUS_PASS
+                    docker push ${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to ArgoCD') {
+            steps {
+                script {
+                    sh """
+                    argocd login 13.235.74.86:31304 --username admin --password <ARGO_PASS> --insecure
+                    argocd app sync my-k8s-app
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
