@@ -2,20 +2,19 @@ pipeline {
     agent any
 
     environment {
-        SONARQUBE_SERVER = 'SonarQube'                          // Jenkins -> Configure System -> SonarQube server name
-        SONARQUBE_TOKEN = credentials('sonar-token')            // Jenkins credential for Sonar token
-        TOMCAT_KEY = credentials('tomcat-ec2-key')              // SSH private key for Tomcat EC2
-        MAVEN_HOME = tool 'Maven 3'                             // Maven tool name in Jenkins
-        NEXUS_URL = 'http://65.2.127.21:32247'
+        SONARQUBE_SERVER = 'SonarQube'                       // Jenkins -> SonarQube server config name
+        SONARQUBE_TOKEN  = credentials('sonar-token')        // Jenkins credential for SonarQube
+        MAVEN_HOME       = tool 'Maven 3'                    // Maven tool in Jenkins
+        NEXUS_URL        = 'http://13.235.74.86:30937'
         NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots/"
-        GROUP_ID = 'com.example'
-        ARTIFACT_ID = 'hello-world'
-        VERSION = '1.0-SNAPSHOT'
-        WAR_NAME = "${ARTIFACT_ID}-${VERSION}.war"
+        GROUP_ID         = 'com.example'
+        ARTIFACT_ID      = 'hello-world'
+        VERSION          = '1.0-SNAPSHOT'
+        WAR_NAME         = "${ARTIFACT_ID}-${VERSION}.war"
     }
 
     parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Git branch to build')
+        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Branch to build')
     }
 
     stages {
@@ -29,7 +28,11 @@ pipeline {
             steps {
                 dir('Sonarqube/hello-world-maven/hello-world') {
                     withSonarQubeEnv("${SONARQUBE_SERVER}") {
-                        sh "${MAVEN_HOME}/bin/mvn clean verify sonar:sonar -Dsonar.login=${SONARQUBE_TOKEN}"
+                        sh """
+                        ${MAVEN_HOME}/bin/mvn clean verify sonar:sonar \
+                        -Dsonar.login=${SONARQUBE_TOKEN} \
+                        -Dsonar.host.url=http://3.110.224.10:30017
+                        """
                     }
                 }
             }
@@ -38,13 +41,15 @@ pipeline {
         stage('Build & Deploy Artifact to Nexus') {
             steps {
                 dir('Sonarqube/hello-world-maven/hello-world') {
-                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    withCredentials([usernamePassword(credentialsId: 'nexus-creds',
+                                                      usernameVariable: 'NEXUS_USER',
+                                                      passwordVariable: 'NEXUS_PASS')]) {
                         sh """
-                            ${MAVEN_HOME}/bin/mvn clean deploy \
-                            -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_SNAPSHOT_REPO} \
-                            -DskipTests \
-                            -Dmaven.deploy.username=${NEXUS_USER} \
-                            -Dmaven.deploy.password=${NEXUS_PASS}
+                        ${MAVEN_HOME}/bin/mvn clean deploy \
+                        -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_SNAPSHOT_REPO} \
+                        -DskipTests \
+                        -Dmaven.deploy.username=${NEXUS_USER} \
+                        -Dmaven.deploy.password=${NEXUS_PASS}
                         """
                     }
                 }
@@ -55,8 +60,8 @@ pipeline {
             steps {
                 dir('Sonarqube/hello-world-maven/hello-world') {
                     script {
-                        def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
-                        def imageTag = "${ARTIFACT_ID}:latest"
+                        def warUrl   = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
+                        def imageTag = "${ARTIFACT_ID}:${env.BUILD_NUMBER}"
 
                         writeFile file: 'Dockerfile', text: """
                         FROM tomcat:9.0
@@ -66,6 +71,7 @@ pipeline {
                         """
 
                         sh "docker build -t ${imageTag} ."
+                        sh "docker tag ${imageTag} 13.235.74.86:30578/${imageTag}"
                     }
                 }
             }
@@ -74,32 +80,30 @@ pipeline {
         stage('Push Docker Image to Nexus Registry') {
             steps {
                 script {
-                    def registry = '65.2.127.21:32247'
-                    def imageName = "${registry}/${ARTIFACT_ID}:latest"
+                    def registry  = '13.235.74.86:30578'
+                    def imageName = "${registry}/${ARTIFACT_ID}:${env.BUILD_NUMBER}"
 
-                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    withCredentials([usernamePassword(credentialsId: 'nexus-creds',
+                                                      usernameVariable: 'NEXUS_USER',
+                                                      passwordVariable: 'NEXUS_PASS')]) {
                         sh """
-                            docker login ${registry} -u ${NEXUS_USER} -p ${NEXUS_PASS}
-                            docker tag ${ARTIFACT_ID}:latest ${imageName}
-                            docker push ${imageName}
+                        docker login ${registry} -u ${NEXUS_USER} -p ${NEXUS_PASS}
+                        docker push ${imageName}
                         """
                     }
                 }
             }
         }
 
-        stage('Deploy to Tomcat EC2') {
+        stage('Deploy to ArgoCD') {
             steps {
-                script {
-                    def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${WAR_NAME}"
-                    def serverIP = '65.0.176.83'
-
+                withCredentials([usernamePassword(credentialsId: 'argo-cd',
+                                                  usernameVariable: 'ARGO_USER',
+                                                  passwordVariable: 'ARGO_PASS')]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no -i ${TOMCAT_KEY} ec2-user@${serverIP} << EOF
-                        wget -O /tmp/${WAR_NAME} ${warUrl}
-                        sudo mv /tmp/${WAR_NAME} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
-                        sudo systemctl restart tomcat
-                    EOF
+                    argocd login 13.235.74.86:31304 --username ${ARGO_USER} --password ${ARGO_PASS} --insecure
+                    argocd app set myapp --revision ${env.BUILD_NUMBER}
+                    argocd app sync myapp
                     """
                 }
             }
