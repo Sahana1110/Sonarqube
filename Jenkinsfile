@@ -54,16 +54,9 @@ pipeline {
         stage('Build & Deploy Artifact to Nexus') {
             steps {
                 dir('hello-world-maven/hello-world') {
-                    withCredentials([usernamePassword(credentialsId: 'nexus-creds',
-                        usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                        sh """
-                        ${MAVEN_HOME}/bin/mvn clean deploy \
-                        -DaltDeploymentRepository=snapshot-repo::default::${NEXUS_SNAPSHOT_REPO} \
-                        -DskipTests \
-                        -Dmaven.deploy.username=$NEXUS_USER \
-                        -Dmaven.deploy.password=$NEXUS_PASS
-                        """
-                    }
+                    sh """
+                    ${MAVEN_HOME}/bin/mvn clean deploy -DskipTests
+                    """
                 }
             }
         }
