@@ -61,31 +61,36 @@ pipeline {
         }
 
         stage('Build Docker Image') {
-        steps {
-        script {
-            def metadataUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
-            sh "curl -u admin:sms10 -o maven-metadata.xml ${metadataUrl}"
+            steps {
+                script {
+                    def metadataUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
+                    sh "curl -u admin:sms10 -o maven-metadata.xml ${metadataUrl}"
 
-            // Extract timestamped snapshot version
-            def snapshotVersion = sh(script: "grep -oPm1 '(?<=<value>)[^<]+' maven-metadata.xml", returnStdout: true).trim()
-            def warFile = "${ARTIFACT_ID}-${snapshotVersion}.war"
-            def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${warFile}"
-            def imageTag = "${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}"
+                    // Extract timestamped snapshot version
+                    def snapshotVersion = sh(script: "grep -oPm1 '(?<=<value>)[^<]+' maven-metadata.xml", returnStdout: true).trim()
+                    def warFile = "${ARTIFACT_ID}-${snapshotVersion}.war"
+                    def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${warFile}"
 
-            writeFile file: 'Dockerfile', text: """
-            FROM tomcat:9.0
-            ADD ${warUrl} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
-            EXPOSE 8080
-            CMD ["catalina.sh", "run"]
-            """
+                    // Download WAR locally
+                    sh "curl -u admin:sms10 -o ${warFile} ${warUrl}"
 
-            sh """
-            docker build -t ${imageTag} .
-            """
+                    def imageTag = "${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}"
+
+                    // Generate Dockerfile dynamically
+                    writeFile file: 'Dockerfile', text: """
+                    FROM tomcat:9.0
+                    COPY ${warFile} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
+                    EXPOSE 8080
+                    CMD ["catalina.sh", "run"]
+                    """
+
+                    // Build Docker image
+                    sh """
+                    docker build -t ${imageTag} .
+                    """
+                }
+            }
         }
-    }
-}
-
 
         stage('Push Docker Image to Nexus Registry') {
             steps {
@@ -100,18 +105,17 @@ pipeline {
         }
 
         stage('Deploy to ArgoCD') {
-    steps {
-        withCredentials([usernamePassword(credentialsId: 'argo-cd', usernameVariable: 'ARGO_USER', passwordVariable: 'ARGO_PASS')]) {
-            sh """
-            /usr/local/bin/argocd login 15.207.221.191:31304 --username $ARGO_USER --password $ARGO_PASS --insecure
-            /usr/local/bin/argocd app sync hello-world-app
-            """
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'argo-cd', usernameVariable: 'ARGO_USER', passwordVariable: 'ARGO_PASS')]) {
+                    sh """
+                    /usr/local/bin/argocd login 15.207.221.191:31304 --username $ARGO_USER --password $ARGO_PASS --insecure
+                    /usr/local/bin/argocd app sync hello-world-app
+                    """
+                }
+            }
         }
+
     }
-}
-
-
-}
 
     post {
         always {
