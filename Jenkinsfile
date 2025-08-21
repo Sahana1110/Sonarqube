@@ -102,7 +102,7 @@ pipeline {
         stage('Update K8s Manifest') {
             steps {
                 sh '''
-                sed -i "s|image: .*hello-world:.*|image: 35.154.53.134:30578/hello-world:${BUILD_NUMBER}|g" k8s-manifests/hello-world-deployment.yaml
+                sed -i "s|image: .*hello-world:.*|image: 35.154.53.134:30578/hello-world:${BUILD_NUMBER}|g" k8s-manifests/deployment.yaml
                 git config user.email "jenkins@example.com"
                 git config user.name "jenkins"
                 git add k8s-manifests/hello-world-deployment.yaml
