@@ -15,7 +15,7 @@ spec:
         app: hello-world
     spec:
       imagePullSecrets:
-      - name: nexus-docker-secret   # <-- Add this line
+      - name: nexus-creds   # <-- Add this line
       containers:
       - name: hello-world
         image: 35.154.53.134:30578/hello-world:165
