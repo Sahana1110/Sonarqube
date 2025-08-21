@@ -6,9 +6,9 @@ pipeline {
         SONARQUBE_TOKEN = credentials('sonar-token')
         MAVEN_HOME = tool 'Maven 3'
 
-        NEXUS_URL = 'http://13.235.74.86:30937'
+        NEXUS_URL = 'http://35.154.53.134:30937'
         NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots/"
-        NEXUS_DOCKER_REGISTRY = '13.235.74.86:30578'
+        NEXUS_DOCKER_REGISTRY = '35.154.53.134:30578'
 
         GROUP_ID = 'com.example'
         ARTIFACT_ID = 'hello-world'
@@ -35,7 +35,7 @@ pipeline {
                         ${MAVEN_HOME}/bin/mvn clean verify sonar:sonar \
                         -Dsonar.projectKey=${ARTIFACT_ID} \
                         -Dsonar.login=${SONARQUBE_TOKEN} \
-                        -Dsonar.host.url=http://3.110.224.10:30017
+                        -Dsonar.host.url=http://13.204.68.226:30017
                         """
                     }
                 }
@@ -103,7 +103,7 @@ pipeline {
     steps {
         withCredentials([usernamePassword(credentialsId: 'argo-cd', usernameVariable: 'ARGO_USER', passwordVariable: 'ARGO_PASS')]) {
             sh """
-            /usr/local/bin/argocd login 13.235.74.86:31304 --username $ARGO_USER --password $ARGO_PASS --insecure
+            /usr/local/bin/argocd login 15.207.221.191:31304 --username $ARGO_USER --password $ARGO_PASS --insecure
             /usr/local/bin/argocd app sync hello-world-app
             """
         }
