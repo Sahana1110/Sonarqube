@@ -16,8 +16,7 @@ spec:
     spec:
       containers:
       - name: hello-world
-        image: 13.235.74.86:30578/hello-world:latest   # Nexus registry image
-        imagePullPolicy: Always
+        image: 35.154.53.134:30578/hello-world:{{ .Values.imageTag }}   # Nexus registry image 
         ports:
         - containerPort: 8080
 
