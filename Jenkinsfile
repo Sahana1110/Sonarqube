@@ -98,15 +98,15 @@ pipeline {
             }
         }
 
-        // 🔥 NEW STAGE: Update manifest with latest image tag
+        // ✅ FIXED STAGE
         stage('Update K8s Manifest') {
             steps {
                 sh '''
                 sed -i "s|image: .*hello-world:.*|image: 35.154.53.134:30578/hello-world:${BUILD_NUMBER}|g" k8s-manifests/deployment.yaml
                 git config user.email "jenkins@example.com"
                 git config user.name "jenkins"
-                git add k8s-manifests/hello-world-deployment.yaml
-                git commit -m "Update image tag to ${BUILD_NUMBER}"
+                git add k8s-manifests/deployment.yaml
+                git commit -m "Update image tag to ${BUILD_NUMBER}" || echo "No changes to commit"
                 git push origin dev
                 '''
             }
