@@ -66,17 +66,14 @@ pipeline {
                     def metadataUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/maven-metadata.xml"
                     sh "curl -u admin:sms10 -o maven-metadata.xml ${metadataUrl}"
 
-                    // Extract timestamped snapshot version
                     def snapshotVersion = sh(script: "grep -oPm1 '(?<=<value>)[^<]+' maven-metadata.xml", returnStdout: true).trim()
                     def warFile = "${ARTIFACT_ID}-${snapshotVersion}.war"
                     def warUrl = "${NEXUS_SNAPSHOT_REPO}${GROUP_ID.replace('.', '/')}/${ARTIFACT_ID}/${VERSION}/${warFile}"
 
-                    // Download WAR locally
                     sh "curl -u admin:sms10 -o ${warFile} ${warUrl}"
 
                     def imageTag = "${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}"
 
-                    // Generate Dockerfile dynamically
                     writeFile file: 'Dockerfile', text: """
                     FROM tomcat:9.0
                     COPY ${warFile} /usr/local/tomcat/webapps/${ARTIFACT_ID}.war
@@ -84,10 +81,7 @@ pipeline {
                     CMD ["catalina.sh", "run"]
                     """
 
-                    // Build Docker image
-                    sh """
-                    docker build -t ${imageTag} .
-                    """
+                    sh "docker build -t ${imageTag} ."
                 }
             }
         }
@@ -101,6 +95,20 @@ pipeline {
                     docker push ${NEXUS_DOCKER_REGISTRY}/${ARTIFACT_ID}:${BUILD_NUMBER}
                     """
                 }
+            }
+        }
+
+        // 🔥 NEW STAGE: Update manifest with latest image tag
+        stage('Update K8s Manifest') {
+            steps {
+                sh '''
+                sed -i "s|image: .*hello-world:.*|image: 35.154.53.134:30578/hello-world:${BUILD_NUMBER}|g" k8s-manifests/hello-world-deployment.yaml
+                git config user.email "jenkins@example.com"
+                git config user.name "jenkins"
+                git add k8s-manifests/hello-world-deployment.yaml
+                git commit -m "Update image tag to ${BUILD_NUMBER}"
+                git push origin dev
+                '''
             }
         }
 
