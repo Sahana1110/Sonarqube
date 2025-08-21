@@ -99,26 +99,26 @@ pipeline {
         }
 
         // ✅ FIXED STAGE
-       stage('Update K8s Manifest') {
-       steps {
-        withCredentials([usernamePassword(credentialsId: 'github-creds',
-            usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
-            sh '''
-            git config user.email "jenkins@example.com"
-            git config user.name "jenkins"
-            
-            # Update manifest
-            sed -i "s|image: .*hello-world:.*|image: 35.154.53.134:30578/hello-world:${BUILD_NUMBER}|g" k8s-manifests/deployment.yaml
+        stage('Update K8s Manifest') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'github-creds',
+                    usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
+                    sh '''
+                    git config user.email "jenkins@example.com"
+                    git config user.name "jenkins"
+                    
+                    # Update manifest
+                    sed -i "s|image: .*hello-world:.*|image: 35.154.53.134:30578/hello-world:${BUILD_NUMBER}|g" k8s-manifests/deployment.yaml
 
-            git add k8s-manifests/deployment.yaml
-            git commit -m "Update image tag to ${BUILD_NUMBER} [ci skip]" || echo "No changes to commit"
+                    git add k8s-manifests/deployment.yaml
+                    git commit -m "Update image tag to ${BUILD_NUMBER} [ci skip]" || echo "No changes to commit"
 
-            # Use HTTPS with credentials
-            git push https://$GIT_USER:$GIT_PASS@github.com/Sahana1110/Sonarqube.git HEAD:${BRANCH_NAME}
-            '''
+                    # Use HTTPS with credentials
+                    git push https://$GIT_USER:$GIT_PASS@github.com/Sahana1110/Sonarqube.git HEAD:${BRANCH_NAME}
+                    '''
+                }
+            }
         }
-    }
- }
 
         stage('Deploy to ArgoCD') {
             steps {
