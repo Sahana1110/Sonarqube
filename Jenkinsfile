@@ -6,9 +6,9 @@ pipeline {
         SONARQUBE_TOKEN = credentials('sonar-token')
         MAVEN_HOME = tool 'Maven 3'
 
-        NEXUS_URL = 'http://35.154.53.134:30937'
+        NEXUS_URL = 'http://13.203.154.136:30937'
         NEXUS_SNAPSHOT_REPO = "${NEXUS_URL}/repository/maven-snapshots/"
-        NEXUS_DOCKER_REGISTRY = '35.154.53.134:30578'
+        NEXUS_DOCKER_REGISTRY = '13.203.154.136:30578'
 
         GROUP_ID = 'com.example'
         ARTIFACT_ID = 'hello-world'
@@ -35,7 +35,7 @@ pipeline {
                         ${MAVEN_HOME}/bin/mvn clean verify sonar:sonar \
                         -Dsonar.projectKey=${ARTIFACT_ID} \
                         -Dsonar.login=${SONARQUBE_TOKEN} \
-                        -Dsonar.host.url=http://13.204.68.226:30017
+                        -Dsonar.host.url=http://3.109.213.98:30017
                         """
                     }
                 }
@@ -108,7 +108,7 @@ pipeline {
                     git config user.name "jenkins"
                     
                     # Update manifest
-                    sed -i "s|image: .*hello-world:.*|image: 35.154.53.134:30578/hello-world:${BUILD_NUMBER}|g" k8s-manifests/deployment.yaml
+                    sed -i "s|image: .*hello-world:.*|image: 13.203.154.136:30578/hello-world:${BUILD_NUMBER}|g" k8s-manifests/deployment.yaml
 
                     git add k8s-manifests/deployment.yaml
                     git commit -m "Update image tag to ${BUILD_NUMBER} [ci skip]" || echo "No changes to commit"
@@ -124,7 +124,7 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'argo-cd', usernameVariable: 'ARGO_USER', passwordVariable: 'ARGO_PASS')]) {
                     sh """
-                    /usr/local/bin/argocd login 15.207.221.191:31304 --username $ARGO_USER --password $ARGO_PASS --insecure
+                    /usr/local/bin/argocd login 13.233.122.3:31304 --username $ARGO_USER --password $ARGO_PASS --insecure
                     /usr/local/bin/argocd app sync hello-world-app
                     """
                 }
