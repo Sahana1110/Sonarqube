@@ -18,6 +18,6 @@ spec:
       - name: nexus-creds   # <-- Add this line
       containers:
       - name: hello-world
-        image: 13.203.154.136:30578/hello-world:166
+        image: 13.203.154.136:30578/hello-world:168
         ports:
         - containerPort: 8080
